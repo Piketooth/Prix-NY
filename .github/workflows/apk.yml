@@ -25,10 +25,16 @@ jobs:
           java-version: 21
           cache: gradle
 
-      - name: Copier l'appli web dans le projet Android
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Tests navigateur
         run: |
-          npm ci
-          npm run sync
+          npx playwright install --with-deps chromium
+          npm test
+
+      - name: Copier l'appli web dans le projet Android
+        run: npm run sync
 
       - name: Clé de signature (si les secrets existent)
         env:
@@ -61,7 +67,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Vrai Prix NY 1.0.${{ github.run_number }}
+          name: Vrai Prix New York 1.0.${{ github.run_number }}
           body: |
             Sur Android : téléchargez **prix-ny.apk** ci-dessous, ouvrez-le et autorisez l'installation.
           files: prix-ny.apk

@@ -5,11 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1d1f24">
   <meta name="description" content="Convertit les prix de New York en euros, taxes et pourboire compris.">
-  <title>Vrai Prix NY</title>
+  <title>Vrai Prix New York</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preload" href="fonts/darker-grotesque-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/unifrakturmaguntia-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -19,21 +20,27 @@
       <img src="icons/icon-512.png" alt="">
       <span class="coin"><span class="coin-face coin-usd">$</span><span class="coin-face coin-eur">€</span></span>
     </div>
-    <span class="splash-title">Vrai Prix NY</span>
+    <span class="splash-title">Vrai Prix New York</span>
   </div>
 
   <!-- Fond d'écran (photo) : deux calques pour le fondu enchaîné -->
   <div class="wallpaper" aria-hidden="true"><div id="wp-a" class="wp-layer"></div><div id="wp-b" class="wp-layer"></div></div>
 
-  <header>
-    <div class="brand">
+  <header class="masthead">
+    <div class="mast-top">
       <img class="brand-mark" src="icons/mark-128.png" alt="" width="44" height="44">
-      <h1>Vrai Prix NY</h1>
-    </div>
-    <button id="settings-open" class="round-btn small" type="button" aria-label="Réglages" title="Réglages">
+      <h1 class="mast-title">Vrai Prix New York</h1>
+      <button id="settings-open" class="round-btn small" type="button" aria-label="Réglages" title="Réglages">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
     </button>
-    <p id="rate-info" class="rate-pill">Chargement du taux…</p>
+    </div>
+    <div class="mast-rule"></div>
+    <p class="mast-edition">
+      <span id="mast-date"></span>
+      <span id="rate-info">Chargement du taux…</span>
+      <span>New York</span>
+    </p>
+    <div class="mast-rule double"></div>
   </header>
 
   <div class="cart-bar-wrap">
@@ -179,6 +186,12 @@
     </div>
     <ul id="saved-list" class="saved-list"></ul>
     <p id="saved-empty" class="empty">Aucun panier enregistré.<br>Depuis le panier, appuyez sur « Enregistrer ».</p>
+    <div class="saved-actions">
+      <button id="export-btn" class="btn secondary" type="button">📤 Exporter</button>
+      <button id="import-btn" class="btn secondary" type="button">📥 Importer</button>
+      <input id="import-file" type="file" accept=".json,application/json,text/plain" hidden>
+    </div>
+    <p class="note saved-note">Sauvegardez vos paniers avant de changer de téléphone ou de désinstaller l'appli.</p>
   </section>
 
   <section id="settings-view" class="sheet" hidden aria-labelledby="settings-title">
@@ -226,6 +239,8 @@
       <div class="card glass setting">
         <span class="label">Fond d'écran</span>
         <div id="wp-gallery" class="wp-gallery" role="radiogroup" aria-label="Fond d'écran"></div>
+        <input id="wp-file" type="file" accept="image/*" hidden>
+        <p class="note">« Ma photo » : choisissez jusqu'à 5 photos de votre téléphone ; elles restent sur l'appareil.</p>
         <label class="check">
           <input id="opt-adaptive" type="checkbox" checked>
           <span class="box" aria-hidden="true"></span>
@@ -299,6 +314,19 @@
       </div>
       <div class="dialog-actions">
         <button class="btn secondary" type="submit" value="cancel">Annuler</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="import-dialog" class="dialog">
+    <form method="dialog">
+      <h3>Importer des paniers</h3>
+      <button id="import-pick" class="menu-item" type="button">📁 Choisir un fichier de sauvegarde</button>
+      <label for="import-text" class="label import-label">Ou collez le texte de la sauvegarde</label>
+      <textarea id="import-text" class="field import-text" rows="4" placeholder='{"app":"vrai-prix-ny",…}'></textarea>
+      <div class="dialog-actions">
+        <button class="btn secondary" type="submit" value="cancel" formnovalidate>Annuler</button>
+        <button class="btn" type="submit" value="ok">Importer</button>
       </div>
     </form>
   </dialog>

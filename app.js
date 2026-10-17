@@ -15,7 +15,9 @@ const RATE_SOURCES = [
     }),
   },
 ];
-const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+// Lecture d'étiquettes (OCR) : fichiers embarqués dans l'appli (hors ligne), CDN en secours.
+const OCR_LOCAL = 'vendor/tesseract/';
+const TESSERACT_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
 // Dans l'APK (Capacitor), les fichiers sont embarqués : on lit les taxes sur le site
 // publié pour profiter des mises à jour, avec le fichier embarqué en secours.
@@ -263,23 +265,32 @@ function step(delta) {
   haptic();
 }
 
+// Date du jour pour la ligne d'édition du bandeau, façon une de journal.
+function renderEditionDate() {
+  $('mast-date').textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// Taux affiché dans la ligne d'édition du bandeau (court) ; le détail complet en infobulle.
 function renderRateInfo(offline) {
   const fx = state.fx;
+  const el = $('rate-info');
   const fee = state.settings.fee ? ` · frais ${pct(state.settings.fee / 100)}` : '';
+  renderRateSetting();
   if (state.settings.rate) {
     const r = state.settings.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
-    $('rate-info').textContent = `1 $ = ${r} € · taux personnalisé${fee}`;
-    renderRateSetting();
+    el.textContent = `1 $ = ${r} € · perso${fee}`;
+    el.title = `Taux personnalisé : 1 $ = ${r} €${fee}`;
     return;
   }
-  renderRateSetting();
   if (!fx) {
-    $('rate-info').textContent = 'Taux indisponible — connectez-vous à Internet une première fois.';
+    el.textContent = 'Taux indisponible';
+    el.title = 'Connectez-vous à Internet une première fois pour obtenir le taux de change.';
     return;
   }
   const rate = fx.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
-  const date = new Date(fx.date + 'T12:00:00').toLocaleDateString('fr-FR');
-  $('rate-info').textContent = `1 $ = ${rate} € · ${date}${fee}${offline ? ' · hors ligne' : ''}`;
+  const d = new Date(fx.date + 'T12:00:00');
+  el.textContent = `1 $ = ${rate} € · ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}${fee}${offline ? ' · hors ligne' : ''}`;
+  el.title = `Taux de référence ${fx.source} du ${d.toLocaleDateString('fr-FR')}${fee}${offline ? ' (hors ligne)' : ''}`;
 }
 
 function renderTaxInfo() {
@@ -372,7 +383,7 @@ function haptic(kind = 'light') {
 function cartText(c = cart) {
   const rate = effRate();
   const toE = (v) => (rate ? ` → ${eur.format(v * rate)}` : '');
-  const lines = [`🗽 ${c.name ? `Panier « ${c.name} »` : 'Mon panier'} — Vrai Prix NY`, ''];
+  const lines = [`🗽 ${c.name ? `Panier « ${c.name} »` : 'Mon panier'} — Vrai Prix New York`, ''];
   c.items.forEach((it, i) => {
     const c = catOf(it.category);
     const qty = it.qty > 1 ? ` ×${it.qty}` : '';
@@ -393,7 +404,7 @@ function cartText(c = cart) {
 async function shareCart(c = cart) {
   if (!c.items.length) return;
   const text = cartText(c);
-  const title = c.name || 'Mon panier Vrai Prix NY';
+  const title = c.name || 'Mon panier Vrai Prix New York';
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
@@ -1024,6 +1035,89 @@ function loadSaved(s, back = true) {
   toast(`Panier « ${s.name} » ouvert`, before.items.length ? 'Annuler' : null, () => { cart = before; saveCart(); });
 }
 
+// --- Sauvegarde : export et import des paniers ------------------------------------
+
+const BACKUP_APP = 'vrai-prix-ny';
+
+function backupData() {
+  return { app: BACKUP_APP, version: 1, exportedAt: new Date().toISOString(), current: cart, saved };
+}
+
+async function exportCarts() {
+  const data = backupData();
+  const n = saved.length + (cart.items.length && !cart.id ? 1 : 0);
+  if (!n) { toast('Aucun panier à exporter'); return; }
+  const text = JSON.stringify(data);
+  const file = `vrai-prix-ny-${data.exportedAt.slice(0, 10)}.json`;
+  try {
+    if (IS_NATIVE) {
+      // Menu de partage d'Android : Drive, e-mail, messagerie…
+      await window.Capacitor.nativePromise('Share', 'share', { title: file, text, dialogTitle: 'Sauvegarder les paniers' });
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      a.download = file;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      toast(`Sauvegarde « ${file} » téléchargée`);
+    }
+    haptic('success');
+  } catch (e) {
+    if (/abort|cancel/i.test(`${e?.name} ${e?.message}`)) return;
+    try { await navigator.clipboard.writeText(text); toast('Sauvegarde copiée dans le presse-papiers'); } catch { toast('Export impossible'); }
+  }
+}
+
+// Ajoute les paniers d'une sauvegarde sans écraser l'existant ; renvoie le nombre de paniers ajoutés.
+function importBackup(text) {
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error('Ce texte n’est pas une sauvegarde valide'); }
+  if (data?.app !== BACKUP_APP || !Array.isArray(data.saved)) throw new Error('Ce fichier n’est pas une sauvegarde Vrai Prix New York');
+  const incoming = data.saved.map((s) => ({ ...s, items: (s.items || []).map(migrateItem) }));
+  if (data.current?.items?.length && !data.current.id) {
+    incoming.push({ id: uid(), name: data.current.name || `Panier importé du ${new Date(data.exportedAt).toLocaleDateString('fr-FR')}`, savedAt: data.exportedAt, items: data.current.items.map(migrateItem) });
+  }
+  const before = clone(saved);
+  let added = 0;
+  for (const s of incoming) {
+    if (!s?.name || !Array.isArray(s.items)) continue;
+    const items = JSON.stringify(s.items);
+    if (saved.some((x) => (x.id === s.id || x.name === s.name) && JSON.stringify(x.items) === items)) continue; // déjà présent
+    const same = saved.find((x) => x.id === s.id);
+    saved.push(same ? { ...clone(s), id: uid(), name: `${s.name} (importé)` } : clone(s));
+    added++;
+  }
+  saveSaved();
+  haptic(added ? 'success' : 'light');
+  toast(added ? `${plural(added, 'panier')} importé${added > 1 ? 's' : ''}` : 'Rien de nouveau à importer', added ? 'Annuler' : null, () => { saved = before; saveSaved(); });
+  return added;
+}
+
+function openImport() {
+  const dlg = $('import-dialog');
+  $('import-text').value = '';
+  dlg.returnValue = '';
+  dlg.addEventListener('close', () => {
+    const text = $('import-text').value.trim();
+    if (dlg.returnValue !== 'ok' || !text) return;
+    try { importBackup(text); } catch (e) { haptic('warning'); toast(e.message); }
+  }, { once: true });
+  dlg.showModal();
+}
+
+function initBackup() {
+  $('export-btn').addEventListener('click', exportCarts);
+  $('import-btn').addEventListener('click', openImport);
+  $('import-pick').addEventListener('click', () => $('import-file').click());
+  $('import-file').addEventListener('change', async () => {
+    const f = $('import-file').files[0];
+    $('import-file').value = '';
+    if (!f) return;
+    $('import-dialog').close();
+    try { importBackup(await f.text()); } catch (e) { haptic('warning'); toast(e.message); }
+  });
+}
+
 // --- Réglages -------------------------------------------------------------
 
 function applySettings() {
@@ -1068,7 +1162,7 @@ function initSettings() {
     state.settings.rate = s.rate > 0 ? s.rate : null;
     state.settings.sound = s.sound !== false;
     if (s.voiceLang === 'en-US') state.settings.voiceLang = 'en-US';
-    if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper)) state.settings.wallpaper = s.wallpaper;
+    if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper) || /^custom-/.test(s.wallpaper || '')) state.settings.wallpaper = s.wallpaper;
     if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
     if (s.adaptive === false) state.settings.adaptive = false;
     if (Number.isFinite(s.frost)) state.settings.frost = Math.min(100, Math.max(0, s.frost));
@@ -1265,15 +1359,113 @@ const WP_INTERVALS = [
   { v: 300, label: '5 min' },
   { v: 900, label: '15 min' },
 ];
-const wpFile = (id) => `wallpapers/${id}.webp`;
-const wpThumb = (id) => `wallpapers/${id}-thumb.webp`;
+// Photos personnelles : image en IndexedDB, vignette et tonalité dans localStorage.
+const CUSTOM_MAX = 5;
+let customWps = []; // [{ id, label, tone, thumb }]
+const customUrls = new Map(); // id → URL de l'image (objet Blob)
+const allWallpapers = () => [...WALLPAPERS, ...customWps];
+const wpFile = (id) => customUrls.get(id) || `wallpapers/${id}.webp`;
+const wpThumb = (id) => customWps.find((c) => c.id === id)?.thumb || `wallpapers/${id}-thumb.webp`;
+
+const wpDb = {
+  open() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('vrai-prix-ny', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('wallpapers');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+  async run(mode, fn) {
+    const db = await wpDb.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('wallpapers', mode);
+      const req = fn(tx.objectStore('wallpapers'));
+      tx.oncomplete = () => resolve(req?.result);
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  get: (id) => wpDb.run('readonly', (st) => st.get(id)),
+  put: (id, blob) => wpDb.run('readwrite', (st) => st.put(blob, id)),
+  del: (id) => wpDb.run('readwrite', (st) => st.delete(id)),
+};
+
+async function loadCustomWallpapers() {
+  customWps = store.get('customWallpapers') || [];
+  for (const c of customWps) {
+    try {
+      const blob = await wpDb.get(c.id);
+      if (blob) customUrls.set(c.id, URL.createObjectURL(blob));
+    } catch { /* stockage indisponible */ }
+  }
+  customWps = customWps.filter((c) => customUrls.has(c.id));
+}
+
+// Recadre la photo au format de l'écran (9:16), la compresse et mesure sa luminosité.
+async function processPhoto(file) {
+  const bmp = await createImageBitmap(file);
+  const target = 9 / 16;
+  let sw = bmp.width, sh = bmp.height;
+  if (sw / sh > target) sw = Math.round(sh * target); else sh = Math.round(sw / target);
+  const sx = Math.round((bmp.width - sw) / 2), sy = Math.round((bmp.height - sh) / 2);
+  const draw = (w, h) => {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(bmp, sx, sy, sw, sh, 0, 0, w, h);
+    return c;
+  };
+  const full = draw(1080, 1920);
+  const blob = await new Promise((r) => full.toBlob(r, 'image/webp', 0.78));
+  const thumb = draw(180, 320).toDataURL('image/webp', 0.7);
+  const px = draw(18, 32).getContext('2d').getImageData(0, 0, 18, 32).data;
+  let lum = 0;
+  for (let i = 0; i < px.length; i += 4) lum += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
+  lum /= px.length / 4;
+  bmp.close?.();
+  return { blob, thumb, tone: lum < 140 ? 'dark' : 'light' };
+}
+
+async function addCustomWallpaper(file) {
+  if (customWps.length >= CUSTOM_MAX) { toast(`${CUSTOM_MAX} photos maximum : supprimez-en une d'abord`); return; }
+  toast('Préparation de la photo…');
+  try {
+    const { blob, thumb, tone } = await processPhoto(file);
+    const id = `custom-${uid()}`;
+    await wpDb.put(id, blob);
+    customUrls.set(id, URL.createObjectURL(blob));
+    customWps.push({ id, label: `Ma photo ${customWps.length + 1}`, tone, thumb });
+    store.set('customWallpapers', customWps);
+    state.settings.wallpaper = id;
+    store.set('settings', state.settings);
+    applyWallpaper();
+    haptic('success');
+    toast('Photo ajoutée aux fonds d’écran');
+  } catch {
+    haptic('warning');
+    toast('Impossible d’utiliser cette photo');
+  }
+}
+
+async function removeCustomWallpaper(id) {
+  customWps = customWps.filter((c) => c.id !== id);
+  store.set('customWallpapers', customWps);
+  try { await wpDb.del(id); } catch { /* ignore */ }
+  const url = customUrls.get(id);
+  customUrls.delete(id);
+  if (state.settings.wallpaper === id) { state.settings.wallpaper = 'random'; store.set('settings', state.settings); }
+  if (wpCurrent === id) wpCurrent = null;
+  applyWallpaper();
+  if (url) setTimeout(() => URL.revokeObjectURL(url), 2000);
+  haptic('medium');
+  toast('Photo retirée');
+}
 let wpCurrent = null;
 let wpLayer = 'a';
 let wpTimer = null;
 
 // Thème imposé par la photo affichée (option « Couleurs adaptées à la photo »).
 function applyTheme() {
-  const wp = document.body.classList.contains('has-wp') && WALLPAPERS.find((w) => w.id === wpCurrent);
+  const wp = document.body.classList.contains('has-wp') && allWallpapers().find((w) => w.id === wpCurrent);
   const tone = state.settings.adaptive && wp ? wp.tone : null;
   document.documentElement.classList.toggle('theme-dark', tone === 'dark');
   document.documentElement.classList.toggle('theme-light', tone === 'light');
@@ -1312,7 +1504,7 @@ function showWallpaper(id) {
 }
 
 function randomWallpaper() {
-  const others = WALLPAPERS.filter((w) => w.id !== wpCurrent);
+  const others = allWallpapers().filter((w) => w.id !== wpCurrent);
   return others[Math.floor(Math.random() * others.length)].id;
 }
 
@@ -1321,9 +1513,10 @@ function applyWallpaper() {
   const { wallpaper, wpInterval } = state.settings;
   if (wallpaper === 'none') showWallpaper(null);
   else if (wallpaper === 'random') {
-    if (!wpCurrent || !WALLPAPERS.some((w) => w.id === wpCurrent)) showWallpaper(randomWallpaper());
+    if (!wpCurrent || !allWallpapers().some((w) => w.id === wpCurrent)) showWallpaper(randomWallpaper());
     if (wpInterval !== 'launch') wpTimer = setInterval(() => showWallpaper(randomWallpaper()), wpInterval * 1000);
-  } else showWallpaper(wallpaper);
+  } else if (allWallpapers().some((w) => w.id === wallpaper)) showWallpaper(wallpaper);
+  else showWallpaper(randomWallpaper());
   renderWallpaperSettings();
 }
 
@@ -1332,7 +1525,8 @@ function renderWallpaperSettings() {
   g.replaceChildren();
   const tiles = [
     { id: 'random', label: 'Aléatoire', icon: '🎲' },
-    ...WALLPAPERS,
+    ...allWallpapers(),
+    ...(customWps.length < CUSTOM_MAX ? [{ id: 'add', label: 'Ma photo', icon: '➕' }] : []),
     { id: 'none', label: 'Aucun', icon: '∅' },
   ];
   for (const t of tiles) {
@@ -1354,7 +1548,17 @@ function renderWallpaperSettings() {
     l.className = 'wp-label';
     l.textContent = t.label;
     b.append(l);
+    if (t.id.startsWith('custom-')) {
+      const del = document.createElement('span');
+      del.className = 'wp-del';
+      del.textContent = '×';
+      del.setAttribute('role', 'button');
+      del.setAttribute('aria-label', `Retirer ${t.label}`);
+      del.addEventListener('click', (e) => { e.stopPropagation(); removeCustomWallpaper(t.id); });
+      b.append(del);
+    }
     b.addEventListener('click', () => {
+      if (t.id === 'add') { $('wp-file').click(); return; }
       state.settings.wallpaper = t.id;
       if (t.id === 'random') wpCurrent = null; // nouveau tirage
       store.set('settings', state.settings);
@@ -1427,8 +1631,20 @@ function loadScript(src) {
 
 async function getOcrWorker() {
   if (ocrWorker) return ocrWorker;
-  if (!window.Tesseract) await loadScript(TESSERACT_URL);
-  ocrWorker = await Tesseract.createWorker('eng');
+  const abs = (path) => new URL(path, location.href).href; // le worker est chargé depuis un blob
+  try {
+    if (!window.Tesseract) await loadScript(`${OCR_LOCAL}tesseract.min.js`);
+    ocrWorker = await Tesseract.createWorker('eng', 1, {
+      workerPath: abs(`${OCR_LOCAL}worker.min.js`),
+      corePath: abs(`${OCR_LOCAL}core/tesseract-core-simd-lstm.wasm.js`),
+      langPath: abs(`${OCR_LOCAL}lang`),
+      cacheMethod: 'none', // données déjà locales
+    });
+  } catch {
+    // téléphone sans SIMD ou fichiers manquants : version en ligne
+    if (!window.Tesseract) await loadScript(TESSERACT_CDN);
+    ocrWorker = await Tesseract.createWorker('eng');
+  }
   await ocrWorker.setParameters({ tessedit_char_whitelist: '0123456789$.,' });
   return ocrWorker;
 }
@@ -1527,7 +1743,7 @@ async function capture() {
       $('scan-results').append(b);
     }
   } catch (e) {
-    $('scan-status').textContent = `Erreur : ${e.message || e}. Une connexion est nécessaire au premier scan.`;
+    $('scan-status').textContent = `Erreur de lecture : ${e.message || e}. Réessayez.`;
   } finally {
     btn.disabled = false;
   }
@@ -1633,6 +1849,7 @@ async function startVoice() {
 
 function init() {
   const firstLaunch = runSplash();
+  renderEditionDate();
   const prefs = store.get('prefs');
   if (prefs) {
     $('opt-tax').checked = prefs.tax ?? true;
@@ -1645,7 +1862,12 @@ function init() {
   state.fx = store.get('fx');
   state.taxes = store.get('taxes') || DEFAULT_TAXES;
   initSettings();
-  applyWallpaper();
+  loadCustomWallpapers().finally(applyWallpaper);
+  $('wp-file').addEventListener('change', () => {
+    const f = $('wp-file').files[0];
+    $('wp-file').value = '';
+    if (f) addCustomWallpaper(f);
+  });
   if (firstLaunch && state.settings.sound) playStartupSound();
   renderTaxInfo();
   renderCategories();
@@ -1677,6 +1899,7 @@ function init() {
   $('cart-save').addEventListener('click', askCartName);
   $('cart-share').addEventListener('click', () => shareCart(cart));
   $('cart-title').addEventListener('click', () => renameCart('cart'));
+  initBackup();
   $('ev-title').addEventListener('click', () => renameCart('edit'));
   $('ev-share').addEventListener('click', () => editing && shareCart(editing));
   $('ev-open').addEventListener('click', () => {
