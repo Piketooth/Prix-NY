@@ -22,18 +22,8 @@
     <span class="splash-title">Vrai Prix NY</span>
   </div>
 
-  <!-- Skyline de Manhattan (mode sombre) -->
-  <svg class="skyline" viewBox="0 0 400 110" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <defs>
-      <linearGradient id="sky-glow" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#ffb734" stop-opacity="0"/>
-        <stop offset="1" stop-color="#ffb734" stop-opacity="1"/>
-      </linearGradient>
-    </defs>
-    <rect class="glow" x="0" y="20" width="400" height="90" fill="url(#sky-glow)"/>
-    <path id="sky-path" d="M0 110V78h14v-8h10v8h8V62h16v48h6V70h12V54h4v-6h4v6h4v56h8V84h10V66h14v44h6V58l6-10V34l3-4V14h2v16l3 4v14l6 10v52h8V74h12v-6h10v42h6V60h6V44h3V30h4v-8h2V8h1v14h2v8h4v14h3v16h6v50h8V80h16V64h4V50h12v14h4v46h8V72h8v-6h14v44h6V56l14-6v-8h2v-14h1v14h2v8l14 6v54h8V76h14V60h10v50h8V82h12v-8h10v36h8V70h12v40z"/>
-    <g id="sky-windows" class="windows"></g>
-  </svg>
+  <!-- Fond d'écran (photo) : deux calques pour le fondu enchaîné -->
+  <div class="wallpaper" aria-hidden="true"><div id="wp-a" class="wp-layer"></div><div id="wp-b" class="wp-layer"></div></div>
 
   <header>
     <div class="brand">
@@ -52,9 +42,6 @@
       <span class="cart-text"><span id="cart-name" class="cart-name">Panier</span><span id="cart-sub" class="cart-sub">vide</span></span>
       <span class="cart-totals"><b id="cart-eur">0,00 €</b><span id="cart-usd">$0.00</span></span>
     </button>
-    <button id="reset-btn" class="round-btn" type="button" aria-label="Réinitialiser le prix et le panier" title="Réinitialiser">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-    </button>
   </div>
 
   <main>
@@ -70,7 +57,7 @@
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
         </button>
       </div>
-      <input id="item-name" class="name-field" type="text" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Nom de l'article (facultatif)" aria-label="Nom de l'article (facultatif)">
+      <input id="item-name" class="name-field" type="text" inputmode="none" data-kbd maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Nom de l'article (facultatif)" aria-label="Nom de l'article (facultatif)">
       <div id="categories" class="categories" role="radiogroup" aria-label="Catégorie"></div>
       <button id="cat-info" class="cat-info" type="button" hidden><span class="info-i" aria-hidden="true">i</span><span id="cat-info-text"></span></button>
       <div class="stepper-row">
@@ -213,6 +200,14 @@
         <p class="note">Dites le prix et, si vous voulez, la catégorie : « 34,99 vêtements », « resto 85 ». Hors connexion, le pack de langue doit être installé sur le téléphone.</p>
       </div>
       <div class="card glass setting">
+        <span class="label">Fond d'écran</span>
+        <div id="wp-gallery" class="wp-gallery" role="radiogroup" aria-label="Fond d'écran"></div>
+        <div id="wp-interval-box">
+          <span class="label">Changement automatique (aléatoire)</span>
+          <div id="wp-interval" class="chips" role="radiogroup" aria-label="Délai de changement"></div>
+        </div>
+      </div>
+      <div class="card glass setting">
         <label class="check">
           <input id="opt-sound" type="checkbox" checked>
           <span class="box" aria-hidden="true"></span>
@@ -226,7 +221,7 @@
     <form method="dialog">
       <h3>Enregistrer le panier</h3>
       <label for="name-input" class="label">Nom du panier</label>
-      <input id="name-input" class="field" type="text" maxlength="40" autocomplete="off" required>
+      <input id="name-input" class="field" type="text" inputmode="none" data-kbd maxlength="40" autocomplete="off" required>
       <div class="dialog-actions">
         <button class="btn secondary" type="submit" value="cancel" formnovalidate>Annuler</button>
         <button class="btn" type="submit" value="ok">Enregistrer</button>
@@ -272,5 +267,6 @@
   </div>
 
   <script src="app.js"></script>
+  <script src="keyboard.js"></script>
 </body>
 </html>

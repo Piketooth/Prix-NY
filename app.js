@@ -51,7 +51,8 @@ const state = {
   qty: 1,
   split: 1,
   // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR' },
+  // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch' },
 };
 
 const store = {
@@ -533,6 +534,8 @@ function cartItemRow(it, i) {
   main.className = 'item-main';
   const name = document.createElement('input');
   name.className = 'item-name';
+  name.inputMode = 'none'; // clavier maison
+  name.dataset.kbd = '';
   name.type = 'text';
   name.maxLength = 40;
   name.value = it.name;
@@ -747,22 +750,6 @@ function addToSaved() {
   dlg.showModal();
 }
 
-function resetAll() {
-  const before = { cart: clone(cart), price: $('price').value };
-  if (!before.cart.items.length && !before.price) return;
-  cart = { id: null, name: null, items: [] };
-  $('price').value = '';
-  saveCart();
-  render();
-  haptic('medium');
-  toast('Prix et panier réinitialisés', 'Annuler', () => {
-    cart = before.cart;
-    $('price').value = before.price;
-    saveCart();
-    render();
-  });
-}
-
 function clearCart() {
   const before = clone(cart);
   cart = { id: null, name: null, items: [] };
@@ -884,6 +871,8 @@ function initSettings() {
     state.settings.rate = s.rate > 0 ? s.rate : null;
     state.settings.sound = s.sound !== false;
     if (s.voiceLang === 'en-US') state.settings.voiceLang = 'en-US';
+    if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper)) state.settings.wallpaper = s.wallpaper;
+    if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
   }
   $('set-rate').value = state.settings.rate ? String(state.settings.rate).replace('.', ',') : '';
   $('set-rate').addEventListener('input', () => {
@@ -982,7 +971,7 @@ function initKeypad() {
   // Toucher ailleurs ferme le pavé.
   document.addEventListener('pointerdown', (e) => {
     if (!keypadOpen()) return;
-    if (e.target.closest('#keypad, #price, .stepper, .categories, .segmented, .chips, .check, #add-btn, #scan-btn, .toast, #cart-open, #settings-open')) return;
+    if (e.target.closest('#keypad, #price, input[data-kbd], #kbd, .stepper, .categories, .segmented, .chips, .check, #add-btn, #scan-btn, .toast, #cart-open, #settings-open')) return;
     history.back();
   });
 }
@@ -992,14 +981,23 @@ function initKeypad() {
 // Chaque écran ouvert ajoute une entrée d'historique : le bouton retour d'Android le referme.
 const openViews = [];
 
-function openView(id, lockScroll = true) {
-  // Le pavé numérique cède sa place : on réutilise son entrée d'historique.
-  const replace = openViews.at(-1)?.id === 'keypad';
-  if (replace) {
-    openViews.pop();
+// Pavé numérique et clavier : fermés quand leur entrée d'historique disparaît.
+const OVERLAYS = {
+  keypad: () => {
     $('keypad').hidden = true;
     document.body.classList.remove('kp-open');
     $('price').blur();
+  },
+  kbd: () => { if (typeof Kbd !== 'undefined') Kbd.hide(); },
+};
+
+function openView(id, lockScroll = true) {
+  // Un pavé ou clavier ouvert cède sa place : on réutilise son entrée d'historique.
+  const top = openViews.at(-1)?.id;
+  const replace = top in OVERLAYS && top !== id;
+  if (replace) {
+    openViews.pop();
+    OVERLAYS[top]();
   }
   $(id).hidden = false;
   openViews.push({ id, lockScroll });
@@ -1013,10 +1011,7 @@ window.addEventListener('popstate', () => {
   const v = openViews.pop();
   if (v) {
     $(v.id).hidden = true;
-    if (v.id === 'keypad') {
-      document.body.classList.remove('kp-open');
-      $('price').blur();
-    }
+    OVERLAYS[v.id]?.();
   }
   if (!openViews.some((x) => x.lockScroll)) document.body.classList.remove('no-scroll');
   document.body.dataset.view = openViews.at(-1)?.id || '';
@@ -1037,27 +1032,121 @@ function toast(msg, actionLabel, action) {
   toastTimer = setTimeout(() => { el.hidden = true; }, actionLabel ? 5000 : 2500);
 }
 
-// --- Skyline : fenêtres éclairées réparties dans les immeubles -----------------
+// --- Fonds d'écran ------------------------------------------------------------
 
-function lightWindows() {
-  const path = $('sky-path');
-  const g = $('sky-windows');
-  if (!path?.isPointInFill) return;
-  const ns = 'http://www.w3.org/2000/svg';
-  const pt = $('sky-path').ownerSVGElement.createSVGPoint();
-  let seed = 7; // pseudo-aléatoire stable d'un lancement à l'autre
-  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
-  for (let x = 3; x < 400; x += 5) {
-    for (let y = 16; y < 106; y += 6) {
-      pt.x = x + 1; pt.y = y + 1;
-      if (!path.isPointInFill(pt) || rnd() > 0.22) continue;
-      const r = document.createElementNS(ns, 'rect');
-      r.setAttribute('x', x); r.setAttribute('y', y);
-      r.setAttribute('width', 2); r.setAttribute('height', 2.5);
-      r.style.animationDelay = `${(rnd() * 8).toFixed(2)}s`;
-      r.style.animationDuration = `${(4 + rnd() * 6).toFixed(2)}s`;
-      g.append(r);
+const WALLPAPERS = [
+  { id: 'central-park', label: 'Central Park' },
+  { id: 'taxis', label: 'Taxis' },
+  { id: 'brooklyn-bridge', label: 'Brooklyn Bridge' },
+  { id: 'empire-state', label: 'Empire State' },
+  { id: 'liberty', label: 'Statue de la Liberté' },
+  { id: 'radio-city', label: 'Radio City' },
+];
+const WP_INTERVALS = [
+  { v: 'launch', label: 'À l’ouverture' },
+  { v: 30, label: '30 s' },
+  { v: 60, label: '1 min' },
+  { v: 300, label: '5 min' },
+  { v: 900, label: '15 min' },
+];
+const wpFile = (id) => `wallpapers/${id}.webp`;
+const wpThumb = (id) => `wallpapers/${id}-thumb.webp`;
+let wpCurrent = null;
+let wpLayer = 'a';
+let wpTimer = null;
+
+function showWallpaper(id) {
+  if (id === wpCurrent) return;
+  wpCurrent = id;
+  if (!id) {
+    $('wp-a').classList.remove('on');
+    $('wp-b').classList.remove('on');
+    document.body.classList.remove('has-wp');
+    return;
+  }
+  const img = new Image();
+  img.onload = () => {
+    if (wpCurrent !== id) return;
+    const next = wpLayer === 'a' ? 'b' : 'a';
+    $(`wp-${next}`).style.backgroundImage = `url("${wpFile(id)}")`;
+    $(`wp-${next}`).classList.add('on');
+    $(`wp-${wpLayer}`).classList.remove('on');
+    wpLayer = next;
+    document.body.classList.add('has-wp');
+  };
+  img.onerror = () => { if (wpCurrent === id) { wpCurrent = null; document.body.classList.remove('has-wp'); } };
+  img.src = wpFile(id);
+}
+
+function randomWallpaper() {
+  const others = WALLPAPERS.filter((w) => w.id !== wpCurrent);
+  return others[Math.floor(Math.random() * others.length)].id;
+}
+
+function applyWallpaper() {
+  clearInterval(wpTimer);
+  const { wallpaper, wpInterval } = state.settings;
+  if (wallpaper === 'none') showWallpaper(null);
+  else if (wallpaper === 'random') {
+    if (!wpCurrent || !WALLPAPERS.some((w) => w.id === wpCurrent)) showWallpaper(randomWallpaper());
+    if (wpInterval !== 'launch') wpTimer = setInterval(() => showWallpaper(randomWallpaper()), wpInterval * 1000);
+  } else showWallpaper(wallpaper);
+  renderWallpaperSettings();
+}
+
+function renderWallpaperSettings() {
+  const g = $('wp-gallery');
+  g.replaceChildren();
+  const tiles = [
+    { id: 'random', label: 'Aléatoire', icon: '🎲' },
+    ...WALLPAPERS,
+    { id: 'none', label: 'Aucun', icon: '∅' },
+  ];
+  for (const t of tiles) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'wp-tile';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(state.settings.wallpaper === t.id));
+    if (t.icon) {
+      b.classList.add('wp-special');
+      const i = document.createElement('span');
+      i.className = 'wp-icon';
+      i.textContent = t.icon;
+      b.append(i);
+    } else {
+      b.style.backgroundImage = `url("${wpThumb(t.id)}")`;
     }
+    const l = document.createElement('span');
+    l.className = 'wp-label';
+    l.textContent = t.label;
+    b.append(l);
+    b.addEventListener('click', () => {
+      state.settings.wallpaper = t.id;
+      if (t.id === 'random') wpCurrent = null; // nouveau tirage
+      store.set('settings', state.settings);
+      applyWallpaper();
+      haptic();
+    });
+    g.append(b);
+  }
+  $('wp-interval-box').hidden = state.settings.wallpaper !== 'random';
+  const box = $('wp-interval');
+  box.replaceChildren();
+  for (const o of WP_INTERVALS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(state.settings.wpInterval === o.v));
+    b.textContent = o.label;
+    b.addEventListener('click', () => {
+      state.settings.wpInterval = o.v;
+      store.set('settings', state.settings);
+      applyWallpaper();
+      haptic();
+    });
+    box.append(b);
   }
 }
 
@@ -1311,7 +1400,6 @@ async function startVoice() {
 
 function init() {
   const firstLaunch = runSplash();
-  lightWindows();
   const prefs = store.get('prefs');
   if (prefs) {
     $('opt-tax').checked = prefs.tax ?? true;
@@ -1324,6 +1412,7 @@ function init() {
   state.fx = store.get('fx');
   state.taxes = store.get('taxes') || DEFAULT_TAXES;
   initSettings();
+  applyWallpaper();
   if (firstLaunch && state.settings.sound) playStartupSound();
   renderTaxInfo();
   renderCategories();
@@ -1348,7 +1437,6 @@ function init() {
   cart.items = cart.items.map(migrateItem);
   saved = (store.get('savedCarts') || []).map((s) => ({ ...s, items: s.items.map(migrateItem) }));
   $('add-btn').addEventListener('click', (e) => addToCart(e.currentTarget));
-  $('reset-btn').addEventListener('click', resetAll);
   $('cart-open').addEventListener('click', () => openView('cart-view'));
   $('saved-open').addEventListener('click', () => openView('saved-view'));
   $('settings-open').addEventListener('click', () => openView('settings-view'));

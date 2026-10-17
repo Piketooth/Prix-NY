@@ -1,11 +1,13 @@
 'use strict';
 
-const CACHE = 'prix-ny-v8';
+const CACHE = 'prix-ny-v9';
 const SHELL = [
   './',
   'index.html',
   'style.css',
   'app.js',
+  'keyboard.js',
+  'dict/words.txt',
   'taxes.json',
   'manifest.webmanifest',
   'icons/icon-192.png',

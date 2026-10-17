@@ -1,0 +1,10 @@
+Dictionnaire du clavier (words.txt)
+
+Liste des mots français et anglais les plus fréquents, extraite de wordfreq 3.1.1
+(Robyn Speer et contributeurs, https://github.com/rspeer/wordfreq), complétée par
+un vocabulaire de shopping new-yorkais.
+
+Les données de fréquence de wordfreq sont distribuées sous licence
+Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0) :
+https://creativecommons.org/licenses/by-sa/4.0/
+Ce fichier dérivé est distribué sous la même licence.
