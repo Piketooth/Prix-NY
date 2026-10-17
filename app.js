@@ -1041,6 +1041,7 @@ const WALLPAPERS = [
   { id: 'empire-state', label: 'Empire State' },
   { id: 'liberty', label: 'Statue de la Liberté' },
   { id: 'radio-city', label: 'Radio City' },
+  { id: 'times-square', label: 'Times Square' },
 ];
 const WP_INTERVALS = [
   { v: 'launch', label: 'À l’ouverture' },
