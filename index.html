@@ -3,67 +3,74 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b3d91">
+  <meta name="theme-color" content="#1d1f24">
   <meta name="description" content="Convertit les prix de New York en euros, taxes et pourboire compris.">
   <title>Prix NY</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/darker-grotesque-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header>
-    <h1>Prix NY</h1>
-    <p id="rate-info" class="muted">Chargement du taux…</p>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">$€</span>
+      <h1>Prix NY</h1>
+    </div>
+    <p id="rate-info" class="rate-pill">Chargement du taux…</p>
   </header>
 
   <main>
-    <section class="card">
-      <label for="price" class="label">Prix affiché (USD)</label>
+    <section class="card input-card">
+      <label for="price" class="label">Prix affiché</label>
       <div class="price-row">
         <span class="prefix">$</span>
         <input id="price" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="Prix en dollars">
         <button id="scan-btn" class="icon-btn" type="button" aria-label="Scanner une étiquette" title="Scanner une étiquette">
-          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm8-3h-3.2l-1.8-2H9L7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-8 11a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
+          <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
         </button>
       </div>
     </section>
 
-    <section class="card options">
-      <label class="check">
-        <input id="opt-tax" type="checkbox" checked>
-        <span>Sales tax NYC <b id="tax-rate-label">8,875 %</b></span>
-      </label>
-      <label class="check sub" id="clothing-row">
-        <input id="opt-clothing" type="checkbox">
-        <span>Vêtement / chaussures &lt; <span id="clothing-threshold">110</span> $ <span class="muted">(exonéré)</span></span>
-      </label>
-      <label class="check">
-        <input id="opt-tip" type="checkbox">
-        <span>Pourboire</span>
-      </label>
-      <div id="tip-panel" class="sub" hidden>
-        <div id="tip-choices" class="chips" role="radiogroup" aria-label="Pourcentage de pourboire"></div>
-        <div class="basis" role="radiogroup" aria-label="Base du pourboire">
-          <span class="muted">Calculé sur :</span>
-          <label><input type="radio" name="tip-basis" value="pre" checked> prix hors taxe</label>
-          <label><input type="radio" name="tip-basis" value="post"> prix taxe comprise</label>
-        </div>
-      </div>
-    </section>
-
-    <section class="card result" aria-live="polite">
+    <section class="hero" aria-live="polite">
+      <span class="hero-label">Vous payez</span>
       <div class="total-eur" id="total-eur">0,00 €</div>
-      <div class="total-usd muted" id="total-usd">Total : $0.00</div>
+      <div class="total-usd" id="total-usd">Total : $0.00</div>
       <dl class="breakdown">
         <div><dt>Prix</dt><dd id="b-price">$0.00</dd></div>
         <div id="b-tax-row"><dt>Taxe</dt><dd id="b-tax">$0.00</dd></div>
         <div id="b-tip-row" hidden><dt>Pourboire</dt><dd id="b-tip">$0.00</dd></div>
       </dl>
     </section>
+
+    <section class="card options">
+      <label class="check">
+        <input id="opt-tax" type="checkbox" checked>
+        <span class="box" aria-hidden="true"></span>
+        <span class="check-text">Sales tax NYC <b id="tax-rate-label">8,875 %</b></span>
+      </label>
+      <label class="check sub" id="clothing-row">
+        <input id="opt-clothing" type="checkbox">
+        <span class="box" aria-hidden="true"></span>
+        <span class="check-text">Vêtement / chaussures &lt; <span id="clothing-threshold">110</span> $ <span class="muted">exonéré</span></span>
+      </label>
+      <label class="check">
+        <input id="opt-tip" type="checkbox">
+        <span class="box" aria-hidden="true"></span>
+        <span class="check-text">Pourboire</span>
+      </label>
+      <div id="tip-panel" class="sub" hidden>
+        <div id="tip-choices" class="chips" role="radiogroup" aria-label="Pourcentage de pourboire"></div>
+        <div class="segmented" role="radiogroup" aria-label="Base du pourboire">
+          <label><input type="radio" name="tip-basis" value="pre" checked><span>Hors taxe</span></label>
+          <label><input type="radio" name="tip-basis" value="post"><span>Taxe comprise</span></label>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <footer class="muted">
+  <footer>
     <span id="tax-info"></span>
     <button id="refresh-btn" type="button" class="link">Actualiser</button>
   </footer>
