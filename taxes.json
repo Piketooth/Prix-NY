@@ -12,8 +12,19 @@
     "rate": 0,
     "detail": "Vêtements et chaussures de moins de 110 $ par article : exonérés à NYC"
   },
+  "grocery": {
+    "label": "Épicerie / Pharmacie",
+    "rate": 0,
+    "detail": "Produits alimentaires d'épicerie et médicaments : exonérés"
+  },
   "tip": {
-    "choices": [0.15, 0.18, 0.20, 0.22, 0.25],
-    "default": 0.20
+    "choices": [
+      0.15,
+      0.18,
+      0.2,
+      0.22,
+      0.25
+    ],
+    "default": 0.2
   }
 }

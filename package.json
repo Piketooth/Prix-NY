@@ -4,10 +4,11 @@
   "private": true,
   "description": "Convertit les prix de New York en euros, taxes et pourboire compris.",
   "scripts": {
-    "www": "rm -rf www && mkdir www && cp -r index.html style.css app.js sw.js taxes.json manifest.webmanifest icons fonts www/",
+    "www": "rm -rf www && mkdir www && cp -r index.html style.css app.js sw.js taxes.json manifest.webmanifest icons fonts sounds www/",
     "sync": "npm run www && cap sync android"
   },
   "dependencies": {
+    "@capacitor-community/speech-recognition": "7.0.1",
     "@capacitor/android": "8.5.3",
     "@capacitor/core": "8.5.3",
     "@capacitor/haptics": "8.0.2",

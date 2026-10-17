@@ -63,12 +63,16 @@
       <div class="price-row">
         <span class="prefix">$</span>
         <input id="price" type="text" inputmode="none" autocomplete="off" placeholder="0" aria-label="Montant">
+        <button id="voice-btn" class="icon-btn" type="button" aria-label="Saisie vocale" title="Saisie vocale">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
         <button id="scan-btn" class="icon-btn" type="button" aria-label="Scanner une étiquette" title="Scanner une étiquette">
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
         </button>
       </div>
       <input id="item-name" class="name-field" type="text" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Nom de l'article (facultatif)" aria-label="Nom de l'article (facultatif)">
       <div id="categories" class="categories" role="radiogroup" aria-label="Catégorie"></div>
+      <button id="cat-info" class="cat-info" type="button" hidden><span class="info-i" aria-hidden="true">i</span><span id="cat-info-text"></span></button>
       <div class="stepper-row">
         <span id="stepper-label" class="stepper-label">Quantité</span>
         <div class="stepper">
@@ -90,9 +94,14 @@
         <div id="b-split-row" hidden><dt>Partage</dt><dd id="b-split"></dd></div>
         <div id="b-fee-row" hidden><dt>Frais bancaires</dt><dd id="b-fee"></dd></div>
       </dl>
-      <button id="add-btn" class="add-btn" type="button">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Ajouter au panier</span>
-      </button>
+      <div class="add-row">
+        <button id="add-btn" class="add-btn" type="button">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Ajouter au panier</span>
+        </button>
+        <button id="add-to-btn" class="add-to-btn" type="button" aria-label="Ajouter à un panier enregistré" title="Ajouter à un panier enregistré">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M12 10v6M9 13h6"/></svg>
+        </button>
+      </div>
     </section>
 
     <section id="tip-card" class="card glass options" hidden>
@@ -110,11 +119,6 @@
       </div>
     </section>
   </main>
-
-  <footer>
-    <span id="tax-info"></span>
-    <button id="refresh-btn" type="button" class="link">Actualiser</button>
-  </footer>
 
   <!-- Pavé numérique -->
   <div id="keypad" class="keypad" hidden>
@@ -173,13 +177,23 @@
     </div>
     <div class="settings">
       <div class="card glass setting">
+        <label for="set-rate" class="label">Taux de change</label>
+        <div class="setting-row">
+          <span class="unit">1 $ =</span>
+          <input id="set-rate" class="field" type="text" inputmode="decimal" autocomplete="off">
+          <span class="unit">€</span>
+        </div>
+        <button id="rate-reset" class="btn secondary small" type="button">Revenir au cours officiel</button>
+        <p id="rate-note" class="note"></p>
+      </div>
+      <div class="card glass setting">
         <label for="set-fee" class="label">Frais bancaires de votre carte</label>
         <div class="setting-row">
           <input id="set-fee" class="field" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
           <span class="unit">%</span>
         </div>
         <div class="chips" id="fee-presets"></div>
-        <p class="note">Commission de change ajoutée aux montants en euros : 0 % pour Revolut, Wise ou N26, souvent 2 à 3 % pour une carte bancaire classique.</p>
+        <p class="note">Commission de change ajoutée aux montants en euros : 0 % pour Revolut, Wise ou N26, souvent 2 à 3 % pour une carte bancaire classique. Si vous saisissez un taux personnalisé qui inclut déjà ces frais, mettez 0 %.</p>
       </div>
       <div class="card glass setting">
         <span class="label">Taxe de vente</span>
@@ -188,7 +202,22 @@
           <span class="box" aria-hidden="true"></span>
           <span class="check-text">Sales tax NYC <b id="tax-rate-label">8,875 %</b></span>
         </label>
-        <p class="note">Ajoutée en caisse à New York. Vêtements et chaussures à moins de <span id="clothing-threshold">110</span> $ par article : exonérés automatiquement (catégorie Vêtements).</p>
+        <p class="note">Ajoutée en caisse à New York. Exonérations automatiques : vêtements et chaussures à moins de <span id="clothing-threshold">110</span> $ par article (catégorie Vêtements et chaussures), épicerie et médicaments (catégorie Épicerie / Pharmacie).</p>
+      </div>
+      <div class="card glass setting">
+        <span class="label">Saisie vocale</span>
+        <div class="segmented" role="radiogroup" aria-label="Langue de la saisie vocale">
+          <label><input type="radio" name="voice-lang" value="fr-FR" checked><span>Français</span></label>
+          <label><input type="radio" name="voice-lang" value="en-US"><span>English</span></label>
+        </div>
+        <p class="note">Dites le prix et, si vous voulez, la catégorie : « 34,99 vêtements », « resto 85 ». Hors connexion, le pack de langue doit être installé sur le téléphone.</p>
+      </div>
+      <div class="card glass setting">
+        <label class="check">
+          <input id="opt-sound" type="checkbox" checked>
+          <span class="box" aria-hidden="true"></span>
+          <span class="check-text">Son au démarrage</span>
+        </label>
       </div>
     </div>
   </section>
@@ -201,6 +230,26 @@
       <div class="dialog-actions">
         <button class="btn secondary" type="submit" value="cancel" formnovalidate>Annuler</button>
         <button class="btn" type="submit" value="ok">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="info-dialog" class="dialog">
+    <form method="dialog">
+      <h3 id="info-title"></h3>
+      <div id="info-body" class="info-body"></div>
+      <div class="dialog-actions">
+        <button class="btn" type="submit" value="ok">Compris</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="pick-dialog" class="dialog">
+    <form method="dialog">
+      <h3>Ajouter à…</h3>
+      <ul id="pick-list" class="pick-list"></ul>
+      <div class="dialog-actions">
+        <button class="btn secondary" type="submit" value="cancel">Annuler</button>
       </div>
     </form>
   </dialog>

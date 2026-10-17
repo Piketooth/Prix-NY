@@ -34,13 +34,12 @@ const DEFAULT_TAXES = {
 
 const CATEGORIES = [
   { id: 'shop', label: 'Shopping', emoji: '🛍️', color: '#ffb734' },
-  { id: 'clothes', label: 'Vêtements', emoji: '👕', color: '#9d8cf0' },
+  { id: 'clothes', label: 'Vêtements et chaussures', emoji: '👕', color: '#9d8cf0' },
   { id: 'food', label: 'Resto', emoji: '🍔', color: '#ff7a59' },
-  { id: 'transport', label: 'Transport', emoji: '🚕', color: '#4da3ff' },
-  { id: 'visit', label: 'Visites', emoji: '🗽', color: '#3fb8a9' },
+  { id: 'grocery', label: 'Épicerie / Pharmacie', emoji: '🛒', color: '#3fb8a9' },
   { id: 'other', label: 'Autre', emoji: '✨', color: '#7a8499' },
 ];
-const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[0];
+const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.at(-1);
 const FEE_PRESETS = [0, 1, 2, 3];
 
 const $ = (id) => document.getElementById(id);
@@ -51,7 +50,8 @@ const state = {
   category: 'shop',
   qty: 1,
   split: 1,
-  settings: { fee: 0 },
+  // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR' },
 };
 
 const store = {
@@ -74,16 +74,24 @@ function parsePrice(text) {
 }
 
 // Taux effectif € par $, frais bancaires compris (null si aucun taux connu).
+// Taux de base € par $ : taux personnalisé s'il est défini, sinon cours officiel.
+function baseRate() {
+  return state.settings.rate || state.fx?.rate || null;
+}
+
 function effRate() {
-  return state.fx ? state.fx.rate * (1 + state.settings.fee / 100) : null;
+  const r = baseRate();
+  return r ? r * (1 + state.settings.fee / 100) : null;
 }
 
 // --- Calcul ---------------------------------------------------------------
 
 // Un article : prix unitaire, quantité, partage (resto), catégorie et options de taxe/pourboire.
 function compute({ unit, qty, split, category, opts }, taxes) {
-  const exempt = category === 'clothes' && unit < taxes.clothing.threshold;
-  const taxRate = opts.tax ? (exempt ? taxes.clothing.rate : taxes.salesTax.rate) : 0;
+  const exemptClothes = category === 'clothes' && unit < taxes.clothing.threshold;
+  const exempt = exemptClothes || category === 'grocery';
+  const exemptRate = exemptClothes ? taxes.clothing.rate : (taxes.grocery?.rate ?? 0);
+  const taxRate = opts.tax ? (exempt ? exemptRate : taxes.salesTax.rate) : 0;
   const price = unit * qty;
   const tax = price * taxRate;
   const tip = opts.tip ? (opts.tipBasis === 'post' ? price + tax : price) * opts.tipPct : 0;
@@ -149,6 +157,7 @@ function render() {
   const fee = state.settings.fee;
 
   $('tip-card').hidden = !food;
+  renderCatInfo(it);
   $('tip-panel').hidden = !it.opts.tip;
   $('stepper-label').textContent = food ? 'Personnes' : 'Quantité';
   $('step-value').textContent = food ? state.split : state.qty;
@@ -168,8 +177,8 @@ function render() {
   $('b-tip').textContent = `${usd.format(it.tip)} (${pct(it.opts.tipPct)})`;
   $('b-split-row').hidden = it.split <= 1;
   $('b-split').textContent = `÷ ${it.split} = ${usd.format(it.share)} chacun`;
-  $('b-fee-row').hidden = !(fee > 0 && state.fx);
-  if (state.fx) $('b-fee').textContent = `${eur.format(it.share * state.fx.rate * fee / 100)} (${pct(fee / 100)})`;
+  $('b-fee-row').hidden = !(fee > 0 && baseRate());
+  if (baseRate()) $('b-fee').textContent = `${eur.format(it.share * baseRate() * fee / 100)} (${pct(fee / 100)})`;
 
   store.set('prefs', { ...it.opts, tip: $('opt-tip').checked, category: state.category });
 }
@@ -188,6 +197,50 @@ function renderCategories() {
     b.addEventListener('click', () => setCategory(c.id));
     box.append(b);
   }
+}
+
+// Exonérations : ligne courte sous les catégories, explication complète au toucher de ⓘ.
+const CAT_INFO = {
+  clothes: {
+    short: (it, t) => (it.unit >= t.clothing.threshold
+      ? `Taxé : article à ${t.clothing.threshold} $ ou plus`
+      : `Exonéré sous ${t.clothing.threshold} $ par article`),
+    title: 'Vêtements et chaussures',
+    body: (t) => [
+      `À New York, les vêtements et chaussures vendus moins de ${t.clothing.threshold} $ par article sont exonérés de la sales tax.`,
+      `À partir de ${t.clothing.threshold} $, la taxe de ${pct(t.salesTax.rate)} s'applique sur la totalité du prix.`,
+      'Le seuil s’applique à chaque article, pas au total du ticket.',
+      'Ne sont pas concernés : sacs, bijoux, montres, lunettes de soleil (choisissez « Shopping »).',
+    ],
+  },
+  grocery: {
+    short: () => 'Exonéré de taxe',
+    title: 'Épicerie / Pharmacie',
+    body: (t) => [
+      'Sont exonérés de la sales tax : les produits alimentaires vendus en épicerie ou au supermarché (fruits, pain, lait, conserves…) et les médicaments, sur ordonnance ou en vente libre.',
+      `Restent taxés à ${pct(t.salesTax.rate)} : plats préparés, sandwichs, cafés à emporter, sodas, bonbons, alcool, cosmétiques et produits d'hygiène (choisissez « Shopping »).`,
+    ],
+  },
+};
+
+function renderCatInfo(it) {
+  const info = CAT_INFO[state.category];
+  $('cat-info').hidden = !info || !it.opts.tax;
+  if (info) $('cat-info-text').textContent = info.short(it, state.taxes);
+}
+
+function showCatInfo() {
+  const info = CAT_INFO[state.category];
+  if (!info) return;
+  $('info-title').textContent = info.title;
+  const body = $('info-body');
+  body.replaceChildren();
+  for (const line of info.body(state.taxes)) {
+    const p = document.createElement('p');
+    p.textContent = line;
+    body.append(p);
+  }
+  $('info-dialog').showModal();
 }
 
 function setCategory(id) {
@@ -210,13 +263,20 @@ function step(delta) {
 
 function renderRateInfo(offline) {
   const fx = state.fx;
+  const fee = state.settings.fee ? ` · frais ${pct(state.settings.fee / 100)}` : '';
+  if (state.settings.rate) {
+    const r = state.settings.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
+    $('rate-info').textContent = `1 $ = ${r} € · taux personnalisé${fee}`;
+    renderRateSetting();
+    return;
+  }
+  renderRateSetting();
   if (!fx) {
     $('rate-info').textContent = 'Taux indisponible — connectez-vous à Internet une première fois.';
     return;
   }
   const rate = fx.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
   const date = new Date(fx.date + 'T12:00:00').toLocaleDateString('fr-FR');
-  const fee = state.settings.fee ? ` · frais ${pct(state.settings.fee / 100)}` : '';
   $('rate-info').textContent = `1 $ = ${rate} € · ${date}${fee}${offline ? ' · hors ligne' : ''}`;
 }
 
@@ -224,9 +284,6 @@ function renderTaxInfo() {
   const t = state.taxes;
   $('tax-rate-label').textContent = pct(t.salesTax.rate);
   $('clothing-threshold').textContent = t.clothing.threshold;
-  $('tax-info').textContent = t.updated
-    ? `Taxes à jour au ${new Date(t.updated + 'T12:00:00').toLocaleDateString('fr-FR')}`
-    : 'Taxes : valeurs par défaut';
 
   const box = $('tip-choices');
   box.replaceChildren();
@@ -322,10 +379,11 @@ function cartText() {
   });
   const t = cartTotals(cart.items);
   lines.push('', `Total : ${usd.format(t.share)}${toE(t.share)}`);
-  if (state.fx) {
-    const r = state.fx.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
+  if (baseRate()) {
+    const r = baseRate().toLocaleString('fr-FR', { maximumFractionDigits: 4 });
+    const when = state.settings.rate ? 'taux personnalisé' : new Date(state.fx.date + 'T12:00:00').toLocaleDateString('fr-FR');
     const fee = state.settings.fee ? `, frais bancaires ${pct(state.settings.fee / 100)}` : '';
-    lines.push(`Taux : 1 $ = ${r} € (${new Date(state.fx.date + 'T12:00:00').toLocaleDateString('fr-FR')}${fee})`);
+    lines.push(`Taux : 1 $ = ${r} € (${when}${fee})`);
   }
   return lines.join('\n');
 }
@@ -362,7 +420,9 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 
 // Articles des versions précédentes (sans quantité ni catégorie).
 function migrateItem(it) {
-  if (it.unit != null) return it;
+  if (it.unit != null) {
+    return CATEGORIES.some((c) => c.id === it.category) ? it : { ...it, category: 'other' }; // Transport, Visites…
+  }
   return {
     id: it.id, name: it.name || '', category: 'shop', unit: it.price, qty: 1, split: 1,
     opts: { tax: it.opts?.tax ?? true, tip: !!it.opts?.tip, tipPct: it.opts?.tipPct ?? 0.2, tipBasis: it.opts?.tipBasis || 'pre' },
@@ -382,8 +442,25 @@ function cartTotals(items) {
   );
 }
 
-function saveCart() {
+// Un panier enregistré ouvert est sauvegardé automatiquement à chaque modification.
+function persistCart() {
+  if (cart.id) {
+    const entry = saved.find((s) => s.id === cart.id);
+    if (entry) {
+      entry.items = clone(cart.items);
+      entry.name = cart.name;
+      entry.savedAt = new Date().toISOString();
+      store.set('savedCarts', saved);
+      renderSaved();
+    } else {
+      cart.id = null; // panier enregistré supprimé entre-temps
+    }
+  }
   store.set('cart', cart);
+}
+
+function saveCart() {
+  persistCart();
   renderCart();
 }
 
@@ -399,7 +476,7 @@ function renderCart() {
 
   $('cart-count').textContent = n;
   $('cart-name').textContent = cart.name || 'Panier';
-  $('cart-sub').textContent = n ? plural(n, 'article') : 'vide';
+  $('cart-sub').textContent = (n ? plural(n, 'article') : 'vide') + (cart.id ? ' · enregistré' : '');
   showEur($('cart-eur'), t.share);
   $('cart-usd').textContent = usd.format(t.share);
   $('cart-open').classList.toggle('empty-cart', !n);
@@ -410,7 +487,7 @@ function renderCart() {
   const detail = [`Prix ${usd.format(t.price)}`];
   if (t.tax) detail.push(`taxes ${usd.format(t.tax)}`);
   if (t.tip) detail.push(`pourboires ${usd.format(t.tip)}`);
-  if (state.settings.fee && rate) detail.push(`frais ${eur.format(t.share * state.fx.rate * state.settings.fee / 100)}`);
+  if (state.settings.fee && rate) detail.push(`frais ${eur.format(t.share * baseRate() * state.settings.fee / 100)}`);
   $('cv-detail').textContent = n ? detail.join(' · ') : '';
   $('cart-empty').hidden = n > 0;
   $('cart-clear').disabled = !n;
@@ -463,7 +540,7 @@ function cartItemRow(it, i) {
   name.setAttribute('aria-label', `Nom de l'article ${i + 1}`);
   name.addEventListener('change', () => {
     it.name = name.value.trim();
-    store.set('cart', cart);
+    persistCart();
   });
   name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
   const detail = document.createElement('span');
@@ -618,6 +695,58 @@ function addToCart(fromEl = $('add-btn')) {
   });
 }
 
+// Ajoute l'article en cours directement dans un panier enregistré.
+function addToSaved() {
+  const item = currentItem();
+  if (!(item.unit > 0)) {
+    $('price').focus();
+    toast('Saisissez d’abord un prix');
+    return;
+  }
+  if (!saved.length) {
+    toast('Aucun panier enregistré : enregistrez d’abord un panier');
+    return;
+  }
+  if (keypadOpen()) history.back();
+  const list = $('pick-list');
+  list.replaceChildren();
+  const dlg = $('pick-dialog');
+  for (const s of saved) {
+    const li = document.createElement('li');
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pick';
+    const title = document.createElement('b');
+    title.textContent = s.name;
+    const meta = document.createElement('span');
+    meta.textContent = plural(s.items.length, 'article') + (s.id === cart.id ? ' · ouvert' : '');
+    b.append(title, meta);
+    b.addEventListener('click', () => {
+      dlg.close();
+      // Le panier ouvert : ajout classique (il est sauvegardé automatiquement).
+      if (s.id === cart.id) { addToCart($('add-to-btn')); return; }
+      const id = uid();
+      const name = $('item-name').value.trim();
+      s.items.push({ id, name, ...item });
+      s.savedAt = new Date().toISOString();
+      saveSaved();
+      $('price').value = '';
+      $('item-name').value = '';
+      state.qty = 1;
+      state.split = 1;
+      render();
+      haptic('success');
+      toast(`${name || `Article ${s.items.length}`} ajouté à « ${s.name} »`, 'Annuler', () => {
+        s.items = s.items.filter((x) => x.id !== id);
+        saveSaved();
+      });
+    });
+    li.append(b);
+    list.append(li);
+  }
+  dlg.showModal();
+}
+
 function resetAll() {
   const before = { cart: clone(cart), price: $('price').value };
   if (!before.cart.items.length && !before.price) return;
@@ -739,9 +868,44 @@ function renderFeePresets() {
   }
 }
 
+function renderRateSetting() {
+  const official = state.fx?.rate;
+  $('set-rate').placeholder = official ? official.toLocaleString('fr-FR', { maximumFractionDigits: 4 }) : '0,92';
+  $('rate-reset').disabled = !state.settings.rate;
+  $('rate-note').textContent = state.settings.rate
+    ? `Taux personnalisé utilisé${official ? ` (cours officiel : ${official.toLocaleString('fr-FR', { maximumFractionDigits: 4 })} €)` : ''}.`
+    : 'Cours officiel de la BCE, mis à jour automatiquement. Saisissez un autre taux pour le remplacer, par exemple celui de votre banque.';
+}
+
 function initSettings() {
   const s = store.get('settings');
-  if (s) state.settings.fee = s.fee || 0;
+  if (s) {
+    state.settings.fee = s.fee || 0;
+    state.settings.rate = s.rate > 0 ? s.rate : null;
+    state.settings.sound = s.sound !== false;
+    if (s.voiceLang === 'en-US') state.settings.voiceLang = 'en-US';
+  }
+  $('set-rate').value = state.settings.rate ? String(state.settings.rate).replace('.', ',') : '';
+  $('set-rate').addEventListener('input', () => {
+    const r = parsePrice($('set-rate').value);
+    state.settings.rate = r > 0 ? r : null;
+    applySettings();
+  });
+  $('rate-reset').addEventListener('click', () => {
+    state.settings.rate = null;
+    $('set-rate').value = '';
+    applySettings();
+    haptic();
+    toast('Cours officiel rétabli');
+  });
+  $('opt-sound').checked = state.settings.sound;
+  $('opt-sound').addEventListener('change', () => { state.settings.sound = $('opt-sound').checked; applySettings(); haptic(); });
+  document.querySelector(`input[name="voice-lang"][value="${state.settings.voiceLang}"]`).checked = true;
+  document.querySelectorAll('input[name="voice-lang"]').forEach((el) => el.addEventListener('change', () => {
+    state.settings.voiceLang = el.value;
+    applySettings();
+    haptic();
+  }));
   $('set-fee').value = state.settings.fee ? String(state.settings.fee).replace('.', ',') : '';
   renderFeePresets();
   $('set-fee').addEventListener('input', () => {
@@ -899,11 +1063,12 @@ function lightWindows() {
 
 // --- Démarrage animé --------------------------------------------------------
 
+// Renvoie true au premier affichage depuis le lancement de l'appli.
 function runSplash() {
   const s = $('splash');
   let seen = false;
   try { seen = sessionStorage.getItem('splash') === '1'; sessionStorage.setItem('splash', '1'); } catch { /* ignore */ }
-  if (REDUCED_MOTION || seen) { s.remove(); return; }
+  if (REDUCED_MOTION || seen) { s.remove(); return !seen; }
   s.classList.add('play');
   const done = () => {
     if (!s.isConnected || s.classList.contains('out')) return;
@@ -912,6 +1077,15 @@ function runSplash() {
   };
   setTimeout(done, 2100);
   s.addEventListener('click', done);
+  return true;
+}
+
+function playStartupSound() {
+  try {
+    const a = new Audio('sounds/baseball.mp3');
+    a.volume = 0.9;
+    a.play().catch(() => { /* lecture automatique bloquée (navigateur) */ });
+  } catch { /* pas d'audio */ }
 }
 
 // --- Scan caméra (OCR) ----------------------------------------------------
@@ -1044,10 +1218,99 @@ function usePrice(p) {
   haptic('success');
 }
 
+// --- Saisie vocale ----------------------------------------------------------
+
+const VOICE_CATEGORIES = [
+  { id: 'clothes', words: ['vêtement', 'vetement', 'habit', 'chaussure', 'basket', 'jean', 'pull', 'veste', 'clothes', 'clothing', 'shoe', 'sneaker', 'apparel', 'shirt'] },
+  { id: 'food', words: ['resto', 'restaurant', 'repas', 'dîner', 'diner', 'déjeuner', 'dejeuner', 'brunch', 'bar', 'café', 'meal', 'dinner', 'lunch', 'breakfast'] },
+  { id: 'grocery', words: ['épicerie', 'epicerie', 'supermarché', 'supermarche', 'pharmacie', 'médicament', 'medicament', 'courses', 'grocery', 'groceries', 'supermarket', 'pharmacy', 'drugstore', 'medicine'] },
+  { id: 'shop', words: ['shopping', 'souvenir', 'boutique', 'magasin', 'cadeau', 'store', 'shop', 'gift'] },
+  { id: 'other', words: ['autre', 'other', 'divers', 'misc'] },
+];
+
+// Extrait prix et catégorie d'une phrase : « 34,99 vêtements », « 12 dollars 50 resto », « $12.50 grocery ».
+function parseVoice(text) {
+  const t = text.toLowerCase().replace(/\u00a0/g, ' ');
+  let category = null;
+  for (const c of VOICE_CATEGORIES) {
+    if (c.words.some((w) => t.includes(w))) { category = c.id; break; }
+  }
+  let price = null;
+  const split = t.match(/(\d+)\s*(?:\$|dollars?|bucks?)\s*(?:et\s+|and\s+)?(\d{1,2})(?!\d)/);
+  if (split) {
+    price = parseFloat(`${split[1]}.${split[2].padStart(2, '0')}`);
+  } else {
+    const m = t.replace(/(\d),(\d{3})(?!\d)/g, '$1$2').match(/\d+(?:[.,]\d{1,2})?/);
+    if (m) price = parseFloat(m[0].replace(',', '.'));
+  }
+  return { price: price > 0 ? price : null, category };
+}
+
+function applyVoice(matches) {
+  for (const text of matches || []) {
+    const r = parseVoice(text);
+    if (r.price == null && !r.category) continue;
+    if (r.category && r.category !== state.category) setCategory(r.category);
+    if (r.price != null) $('price').value = r.price.toFixed(2).replace('.', ',');
+    render();
+    haptic('success');
+    const parts = [];
+    if (r.price != null) parts.push(usd.format(r.price));
+    if (r.category) parts.push(catOf(r.category).label);
+    toast(`Compris : ${parts.join(' · ')}`);
+    return;
+  }
+  haptic('warning');
+  toast(`Pas compris${matches?.[0] ? ` : « ${matches[0]} »` : ''}. Réessayez.`);
+}
+
+async function startVoice() {
+  if (keypadOpen()) history.back();
+  const lang = state.settings.voiceLang;
+  const btn = $('voice-btn');
+  try {
+    if (IS_NATIVE) {
+      const cap = window.Capacitor;
+      const perm = await cap.nativePromise('SpeechRecognition', 'requestPermissions', { permissions: ['speechRecognition'] });
+      if (perm?.speechRecognition && perm.speechRecognition !== 'granted') {
+        toast('Autorisez le micro pour la saisie vocale');
+        return;
+      }
+      btn.classList.add('listening');
+      const res = await cap.nativePromise('SpeechRecognition', 'start', {
+        language: lang, maxResults: 5, popup: true, partialResults: false,
+        prompt: lang === 'fr-FR' ? 'Dites le prix et la catégorie' : 'Say the price and category',
+      });
+      applyVoice(res?.matches);
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      toast('Saisie vocale indisponible sur ce navigateur');
+      return;
+    }
+    const rec = new SR();
+    rec.lang = lang;
+    rec.maxAlternatives = 5;
+    rec.interimResults = false;
+    btn.classList.add('listening');
+    toast(lang === 'fr-FR' ? 'Parlez : prix et catégorie…' : 'Speak: price and category…');
+    rec.onresult = (e) => applyVoice(Array.from(e.results[0]).map((a) => a.transcript));
+    rec.onerror = (e) => { if (e.error !== 'aborted') toast(e.error === 'not-allowed' ? 'Autorisez le micro pour la saisie vocale' : 'Pas compris, réessayez'); };
+    rec.onend = () => btn.classList.remove('listening');
+    rec.start();
+    return;
+  } catch (e) {
+    if (!/cancel|^0$/i.test(String(e?.message ?? e))) toast('Pas compris, réessayez');
+  } finally {
+    if (IS_NATIVE) btn.classList.remove('listening');
+  }
+}
+
 // --- Démarrage ------------------------------------------------------------
 
 function init() {
-  runSplash();
+  const firstLaunch = runSplash();
   lightWindows();
   const prefs = store.get('prefs');
   if (prefs) {
@@ -1061,6 +1324,7 @@ function init() {
   state.fx = store.get('fx');
   state.taxes = store.get('taxes') || DEFAULT_TAXES;
   initSettings();
+  if (firstLaunch && state.settings.sound) playStartupSound();
   renderTaxInfo();
   renderCategories();
   if (state.fx) renderRateInfo(false);
@@ -1072,8 +1336,10 @@ function init() {
   $('item-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('item-name').blur(); });
   $('step-minus').addEventListener('click', () => step(-1));
   $('step-plus').addEventListener('click', () => step(1));
-  $('refresh-btn').addEventListener('click', () => { loadRate(); loadTaxes(); });
   $('scan-btn').addEventListener('click', openScanner);
+  $('voice-btn').addEventListener('click', startVoice);
+  $('cat-info').addEventListener('click', showCatInfo);
+  $('add-to-btn').addEventListener('click', addToSaved);
   $('scan-close').addEventListener('click', closeScanner);
   $('scan-capture').addEventListener('click', capture);
   initKeypad();
