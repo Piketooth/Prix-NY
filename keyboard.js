@@ -317,11 +317,13 @@ const Kbd = (() => {
     const h = el.offsetHeight;
     document.body.style.setProperty('--kp-h', `${h}px`);
     document.body.classList.add('kp-open');
-    if (target.closest('dialog')) return;
+    const field = target;
+    if (field.closest('dialog')) return;
     setTimeout(() => {
-      const overlap = target.getBoundingClientRect().bottom - (innerHeight - h - 16);
+      if (!isOpen() || target !== field) return; // fermé ou changé entre-temps
+      const overlap = field.getBoundingClientRect().bottom - (innerHeight - h - 16);
       if (overlap > 0) {
-        const scroller = target.closest('.cart-list') || window;
+        const scroller = field.closest('.cart-list') || window;
         scroller.scrollBy({ top: overlap, behavior: 'smooth' });
       }
     }, 30);
@@ -364,6 +366,10 @@ const Kbd = (() => {
     document.addEventListener('focusin', (e) => {
       const t = e.target;
       if (t.matches?.('input[data-kbd]')) open(t);
+    });
+    // Entrée (clavier physique) valide le champ et ferme le clavier maison.
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && isOpen() && e.target === target) close();
     });
     document.addEventListener('pointerdown', (e) => {
       if (!isOpen()) return;
