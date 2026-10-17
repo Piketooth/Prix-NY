@@ -21,6 +21,15 @@
     <p id="rate-info" class="rate-pill">Chargement du taux…</p>
   </header>
 
+  <div class="cart-bar-wrap">
+    <button id="cart-open" class="cart-bar" type="button" aria-label="Ouvrir le panier">
+      <span class="cart-icon"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/></svg><span id="cart-count" class="cart-count">0</span></span>
+      <span class="cart-text"><span id="cart-name" class="cart-name">Panier</span><span id="cart-sub" class="cart-sub">vide</span></span>
+      <span class="cart-totals"><b id="cart-eur">0,00 €</b><span id="cart-usd">$0.00</span></span>
+    </button>
+    <button id="reset-btn" class="round-btn" type="button" aria-label="Réinitialiser le prix et le panier" title="Réinitialiser"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+  </div>
+
   <main>
     <section class="card input-card">
       <label for="price" class="label">Prix affiché</label>
@@ -42,6 +51,7 @@
         <div id="b-tax-row"><dt>Taxe</dt><dd id="b-tax">$0.00</dd></div>
         <div id="b-tip-row" hidden><dt>Pourboire</dt><dd id="b-tip">$0.00</dd></div>
       </dl>
+      <button id="add-btn" class="add-btn" type="button"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Ajouter au panier</span></button>
     </section>
 
     <section class="card options">
@@ -74,6 +84,54 @@
     <span id="tax-info"></span>
     <button id="refresh-btn" type="button" class="link">Actualiser</button>
   </footer>
+
+  <section id="cart-view" class="sheet" hidden aria-labelledby="cart-title">
+    <div class="sheet-head">
+      <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 id="cart-title">Panier</h2>
+      <button id="saved-open" class="pill-btn" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span>Mes paniers</span><span id="saved-count" class="pill-count"></span></button>
+    </div>
+    <ol id="cart-list" class="cart-list"></ol>
+    <p id="cart-empty" class="empty">Votre panier est vide.<br>Ajoutez un article depuis l'écran principal.</p>
+    <div class="sheet-foot">
+      <div class="foot-total">
+        <span class="hero-label">Total panier</span>
+        <b id="cv-eur">0,00 €</b>
+        <span id="cv-usd" class="foot-usd"></span>
+        <span id="cv-detail" class="foot-detail"></span>
+      </div>
+      <div class="foot-actions">
+        <button id="cart-clear" class="btn secondary" type="button">Vider</button>
+        <button id="cart-save" class="btn" type="button">Enregistrer</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="saved-view" class="sheet" hidden aria-labelledby="saved-title">
+    <div class="sheet-head">
+      <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 id="saved-title">Mes paniers</h2>
+    </div>
+    <ul id="saved-list" class="saved-list"></ul>
+    <p id="saved-empty" class="empty">Aucun panier enregistré.<br>Depuis le panier, appuyez sur « Enregistrer ».</p>
+  </section>
+
+  <dialog id="name-dialog" class="dialog">
+    <form method="dialog">
+      <h3>Enregistrer le panier</h3>
+      <label for="name-input" class="label">Nom du panier</label>
+      <input id="name-input" class="field" type="text" maxlength="40" autocomplete="off" required>
+      <div class="dialog-actions">
+        <button class="btn secondary" type="submit" value="cancel" formnovalidate>Annuler</button>
+        <button class="btn" type="submit" value="ok">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden>
+    <span id="toast-msg"></span>
+    <button id="toast-action" type="button" hidden></button>
+  </div>
 
   <div id="scanner" class="scanner" hidden>
     <video id="video" playsinline muted></video>

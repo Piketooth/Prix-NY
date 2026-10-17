@@ -5,6 +5,7 @@ Appli web installable (PWA) pour Android : elle convertit un prix affiché à Ne
 - **Taux de change** : récupéré à chaque ouverture (BCE via [Frankfurter](https://frankfurter.dev), secours [ExchangeRate-API](https://www.exchangerate-api.com)), gardé en mémoire pour le mode hors ligne.
 - **Taxes** : lues dans [`taxes.json`](taxes.json). Pour mettre à jour un taux, modifiez ce fichier et poussez sur `main` : tous les téléphones l'auront à la prochaine ouverture.
 - **Options (cases à cocher)** : sales tax NYC (8,875 %), exonération vêtements/chaussures < 110 $ par article, pourboire 15–25 % calculé sur le prix hors taxe ou taxe comprise.
+- **Panier** : ajout de l'article en cours, rappel du nombre d'articles et du total (€ et $) en haut de l'écran, articles numérotés et renommables, suppression avec annulation, réinitialisation depuis l'écran principal, paniers enregistrés sous un nom personnalisé (stockés sur l'appareil).
 - **Scan caméra** : lecture d'une étiquette de prix par OCR ([Tesseract.js](https://tesseract.projectnaptha.com), chargé au premier scan ; nécessite une connexion la première fois).
 
 ## Mise en ligne (GitHub Pages)

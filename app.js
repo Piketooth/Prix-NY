@@ -169,12 +169,16 @@ async function loadRate() {
       store.set('fx', fx);
       renderRateInfo(false);
       render();
+      renderCart();
+      renderSaved();
       return;
     } catch { /* on essaie la source suivante */ }
   }
   state.fx = store.get('fx');
   renderRateInfo(true);
   render();
+  renderCart();
+  renderSaved();
 }
 
 // --- Scan caméra (OCR) ----------------------------------------------------
@@ -305,6 +309,261 @@ function usePrice(p) {
   render();
 }
 
+// --- Panier ---------------------------------------------------------------
+
+// cart : panier en cours ; id/name renseignés s'il provient d'un panier enregistré.
+let cart = { id: null, name: null, items: [] };
+let saved = [];
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const clone = (v) => JSON.parse(JSON.stringify(v));
+const toEur = (amount) => (state.fx ? eur.format(amount * state.fx.rate) : '— €');
+const plural = (n, word) => `${n} ${word}${n > 1 ? 's' : ''}`;
+
+function cartTotals(items) {
+  return items.reduce(
+    (t, it) => ({ price: t.price + it.price, tax: t.tax + it.tax, tip: t.tip + it.tip, total: t.total + it.total }),
+    { price: 0, tax: 0, tip: 0, total: 0 },
+  );
+}
+
+function saveCart() {
+  store.set('cart', cart);
+  renderCart();
+}
+
+function saveSaved() {
+  store.set('savedCarts', saved);
+  renderSaved();
+}
+
+function renderCart() {
+  const n = cart.items.length;
+  const t = cartTotals(cart.items);
+
+  $('cart-count').textContent = n;
+  $('cart-name').textContent = cart.name || 'Panier';
+  $('cart-sub').textContent = n ? plural(n, 'article') : 'vide';
+  $('cart-eur').textContent = toEur(t.total);
+  $('cart-usd').textContent = usd.format(t.total);
+  $('cart-open').classList.toggle('empty-cart', !n);
+
+  $('cart-title').textContent = cart.name || 'Panier';
+  $('cv-eur').textContent = toEur(t.total);
+  $('cv-usd').textContent = usd.format(t.total);
+  const detail = [`Prix ${usd.format(t.price)}`];
+  if (t.tax) detail.push(`taxes ${usd.format(t.tax)}`);
+  if (t.tip) detail.push(`pourboires ${usd.format(t.tip)}`);
+  $('cv-detail').textContent = n ? detail.join(' · ') : '';
+  $('cart-empty').hidden = n > 0;
+  $('cart-clear').disabled = !n;
+  $('cart-save').disabled = !n;
+
+  const list = $('cart-list');
+  list.replaceChildren();
+  cart.items.forEach((it, i) => list.append(cartItemRow(it, i)));
+}
+
+function cartItemRow(it, i) {
+  const li = document.createElement('li');
+  li.className = 'item';
+
+  const num = document.createElement('span');
+  num.className = 'item-num';
+  num.textContent = i + 1;
+
+  const main = document.createElement('div');
+  main.className = 'item-main';
+  const name = document.createElement('input');
+  name.className = 'item-name';
+  name.type = 'text';
+  name.maxLength = 40;
+  name.value = it.name;
+  name.placeholder = `Article ${i + 1}`;
+  name.setAttribute('aria-label', `Nom de l'article ${i + 1}`);
+  name.addEventListener('change', () => {
+    it.name = name.value.trim();
+    store.set('cart', cart);
+  });
+  name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
+  const detail = document.createElement('span');
+  detail.className = 'item-detail';
+  const parts = [usd.format(it.price)];
+  if (it.tax) parts.push(`taxe ${usd.format(it.tax)}`);
+  else if (it.opts.tax) parts.push('exonéré');
+  if (it.tip) parts.push(`pourboire ${usd.format(it.tip)}`);
+  detail.textContent = parts.join(' + ');
+  main.append(name, detail);
+
+  const amt = document.createElement('div');
+  amt.className = 'item-amt';
+  const e = document.createElement('b');
+  e.textContent = toEur(it.total);
+  const u = document.createElement('span');
+  u.textContent = usd.format(it.total);
+  amt.append(e, u);
+
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'item-del';
+  del.setAttribute('aria-label', `Supprimer l'article ${i + 1}`);
+  del.textContent = '×';
+  del.addEventListener('click', () => {
+    const before = clone(cart);
+    cart.items.splice(i, 1);
+    saveCart();
+    toast(`${it.name || `Article ${i + 1}`} supprimé`, 'Annuler', () => { cart = before; saveCart(); });
+  });
+
+  li.append(num, main, amt, del);
+  return li;
+}
+
+function addToCart() {
+  const price = parsePrice($('price').value);
+  if (!(price > 0)) {
+    $('price').focus();
+    toast('Saisissez d’abord un prix');
+    return;
+  }
+  const opts = readOptions();
+  const r = compute(price, opts, state.taxes);
+  cart.items.push({ id: uid(), name: '', price, opts, taxRate: r.taxRate, tax: r.tax, tip: r.tip, total: r.total });
+  saveCart();
+  $('price').value = '';
+  render();
+
+  const bar = $('cart-open');
+  bar.classList.remove('bump');
+  void bar.offsetWidth; // relance l'animation
+  bar.classList.add('bump');
+  const n = cart.items.length;
+  toast(`Article ${n} ajouté au panier`, 'Annuler', () => { cart.items.pop(); saveCart(); });
+}
+
+function resetAll() {
+  const before = { cart: clone(cart), price: $('price').value };
+  if (!before.cart.items.length && !before.price) return;
+  cart = { id: null, name: null, items: [] };
+  $('price').value = '';
+  saveCart();
+  render();
+  toast('Prix et panier réinitialisés', 'Annuler', () => {
+    cart = before.cart;
+    $('price').value = before.price;
+    saveCart();
+    render();
+  });
+}
+
+function clearCart() {
+  const before = clone(cart);
+  cart = { id: null, name: null, items: [] };
+  saveCart();
+  toast('Panier vidé', 'Annuler', () => { cart = before; saveCart(); });
+}
+
+function askCartName() {
+  const dlg = $('name-dialog');
+  const input = $('name-input');
+  input.value = cart.name || `Panier du ${new Date().toLocaleDateString('fr-FR')}`;
+  dlg.returnValue = '';
+  dlg.showModal();
+  input.select();
+  dlg.addEventListener('close', () => {
+    const name = input.value.trim();
+    if (dlg.returnValue !== 'ok' || !name) return;
+    const entry = { id: cart.id || uid(), name, savedAt: new Date().toISOString(), items: clone(cart.items) };
+    const idx = saved.findIndex((s) => s.id === entry.id);
+    if (idx >= 0) saved[idx] = entry; else saved.unshift(entry);
+    cart.id = entry.id;
+    cart.name = name;
+    saveSaved();
+    saveCart();
+    toast(`Panier « ${name} » enregistré`);
+  }, { once: true });
+}
+
+function renderSaved() {
+  $('saved-count').textContent = saved.length || '';
+  $('saved-empty').hidden = saved.length > 0;
+  const list = $('saved-list');
+  list.replaceChildren();
+  for (const s of saved) {
+    const li = document.createElement('li');
+    li.className = 'saved';
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'saved-main';
+    const title = document.createElement('b');
+    title.textContent = s.name;
+    const meta = document.createElement('span');
+    const date = new Date(s.savedAt).toLocaleDateString('fr-FR');
+    meta.textContent = `${plural(s.items.length, 'article')} · ${date}`;
+    const total = document.createElement('span');
+    total.className = 'saved-total';
+    total.textContent = toEur(cartTotals(s.items).total);
+    open.append(title, meta, total);
+    open.addEventListener('click', () => loadSaved(s));
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'item-del';
+    del.setAttribute('aria-label', `Supprimer le panier ${s.name}`);
+    del.textContent = '×';
+    del.addEventListener('click', () => {
+      const before = clone(saved);
+      saved = saved.filter((x) => x.id !== s.id);
+      if (cart.id === s.id) { cart.id = null; saveCart(); }
+      saveSaved();
+      toast(`« ${s.name} » supprimé`, 'Annuler', () => { saved = before; saveSaved(); });
+    });
+    li.append(open, del);
+    list.append(li);
+  }
+}
+
+function loadSaved(s) {
+  const before = clone(cart);
+  cart = { id: s.id, name: s.name, items: clone(s.items) };
+  saveCart();
+  history.back(); // retour au panier
+  toast(`Panier « ${s.name} » ouvert`, before.items.length ? 'Annuler' : null, () => { cart = before; saveCart(); });
+}
+
+// --- Écrans et notifications ------------------------------------------------
+
+// Chaque écran ouvert ajoute une entrée d'historique : le bouton retour d'Android le referme.
+const openViews = [];
+
+function openView(id) {
+  $(id).hidden = false;
+  openViews.push(id);
+  history.pushState({ view: id }, '');
+  document.body.classList.add('no-scroll');
+  document.body.dataset.view = id;
+}
+
+window.addEventListener('popstate', () => {
+  const id = openViews.pop();
+  if (id) $(id).hidden = true;
+  if (!openViews.length) document.body.classList.remove('no-scroll');
+  document.body.dataset.view = openViews.at(-1) || '';
+});
+
+let toastTimer = null;
+function toast(msg, actionLabel, action) {
+  const el = $('toast');
+  const btn = $('toast-action');
+  $('toast-msg').textContent = msg;
+  btn.hidden = !actionLabel;
+  btn.textContent = actionLabel || '';
+  btn.onclick = () => { el.hidden = true; action?.(); };
+  el.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.hidden = true; }, actionLabel ? 5000 : 2500);
+}
+
 // --- Démarrage ------------------------------------------------------------
 
 function init() {
@@ -328,6 +587,19 @@ function init() {
   $('scan-btn').addEventListener('click', openScanner);
   $('scan-close').addEventListener('click', closeScanner);
   $('scan-capture').addEventListener('click', capture);
+
+  cart = store.get('cart') || cart;
+  saved = store.get('savedCarts') || [];
+  $('add-btn').addEventListener('click', addToCart);
+  $('price').addEventListener('keydown', (e) => { if (e.key === 'Enter') addToCart(); });
+  $('reset-btn').addEventListener('click', resetAll);
+  $('cart-open').addEventListener('click', () => openView('cart-view'));
+  $('saved-open').addEventListener('click', () => openView('saved-view'));
+  $('cart-clear').addEventListener('click', clearCart);
+  $('cart-save').addEventListener('click', askCartName);
+  document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => history.back()));
+  renderCart();
+  renderSaved();
 
   render();
   loadTaxes();
