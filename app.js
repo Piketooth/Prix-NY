@@ -17,6 +17,13 @@ const RATE_SOURCES = [
 ];
 const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 
+// Dans l'APK (Capacitor), les fichiers sont embarqués : on lit les taxes sur le site
+// publié pour profiter des mises à jour, avec le fichier embarqué en secours.
+const IS_NATIVE = !!window.Capacitor?.isNativePlatform?.();
+const TAXES_URLS = IS_NATIVE
+  ? ['https://piketooth.github.io/Prix-NY/taxes.json', 'taxes.json']
+  : ['taxes.json'];
+
 const DEFAULT_TAXES = {
   updated: null,
   salesTax: { rate: 0.08875 },
@@ -139,13 +146,15 @@ async function fetchJson(url) {
 }
 
 async function loadTaxes() {
-  try {
-    const t = await fetchJson('taxes.json');
-    if (typeof t?.salesTax?.rate !== 'number') throw new Error('taxes.json invalide');
-    state.taxes = { ...DEFAULT_TAXES, ...t };
-    store.set('taxes', state.taxes);
-  } catch {
-    state.taxes = store.get('taxes') || DEFAULT_TAXES;
+  state.taxes = store.get('taxes') || DEFAULT_TAXES;
+  for (const url of TAXES_URLS) {
+    try {
+      const t = await fetchJson(url);
+      if (typeof t?.salesTax?.rate !== 'number') throw new Error('taxes.json invalide');
+      state.taxes = { ...DEFAULT_TAXES, ...t };
+      store.set('taxes', state.taxes);
+      break;
+    } catch { /* on essaie la source suivante */ }
   }
   renderTaxInfo();
   render();
@@ -324,7 +333,7 @@ function init() {
   loadTaxes();
   loadRate();
 
-  if ('serviceWorker' in navigator) {
+  if ('serviceWorker' in navigator && !IS_NATIVE) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 }

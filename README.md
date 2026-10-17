@@ -13,6 +13,15 @@ Appli web installable (PWA) pour Android : elle convertit un prix affiché à Ne
 2. Chaque modification poussée sur `main` est publiée automatiquement en une minute environ.
 3. Sur Android, ouvrez https://piketooth.github.io/Prix-NY/ dans Chrome, puis menu **⋮ → Installer l'application**.
 
+## APK Android
+
+Chaque modification poussée sur `main` compile un APK (projet [Capacitor](https://capacitorjs.com) dans `android/`) et le publie dans les [Releases](https://github.com/Piketooth/Prix-NY/releases/latest) :
+
+- Téléchargement direct : https://github.com/Piketooth/Prix-NY/releases/latest/download/prix-ny.apk
+- L'appli est embarquée dans l'APK (fonctionne hors ligne) ; les taux de taxe sont lus sur le site publié, avec `taxes.json` embarqué en secours.
+
+**Signature.** Sans configuration, l'APK est signé avec une clé de debug qui change à chaque compilation : il faut désinstaller l'ancienne version avant d'installer la nouvelle. Pour pouvoir installer les mises à jour par-dessus, ajoutez dans *Settings → Secrets and variables → Actions* : `ANDROID_KEYSTORE_BASE64` (keystore encodé en base64), `ANDROID_KEYSTORE_PASSWORD` et `ANDROID_KEY_ALIAS`.
+
 ## Tester en local
 
 ```sh

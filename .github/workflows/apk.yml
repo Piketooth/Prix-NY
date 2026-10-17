@@ -1,0 +1,68 @@
+name: APK Android
+
+on:
+  push:
+    branches: [main, ccr-e1f37b95-nbd1nf]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Copier l'appli web dans le projet Android
+        run: |
+          npm ci
+          npm run sync
+
+      - name: Clé de signature (si les secrets existent)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Pas de secret ANDROID_KEYSTORE_BASE64 : APK signé avec une clé de debug."
+          fi
+
+      - name: Compiler l'APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease -PbuildNumber=${{ github.run_number }} --no-daemon
+          cp app/build/outputs/apk/release/app-release.apk ../prix-ny.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prix-ny-apk
+          path: prix-ny.apk
+
+      - name: Publier la release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          name: Prix NY 1.0.${{ github.run_number }}
+          body: |
+            Sur Android : téléchargez **prix-ny.apk** ci-dessous, ouvrez-le et autorisez l'installation.
+          files: prix-ny.apk
+          make_latest: true
