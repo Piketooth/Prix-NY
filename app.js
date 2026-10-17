@@ -370,7 +370,7 @@ function haptic(kind = 'light') {
 function cartText() {
   const rate = effRate();
   const toE = (v) => (rate ? ` → ${eur.format(v * rate)}` : '');
-  const lines = [`🗽 ${cart.name ? `Panier « ${cart.name} »` : 'Mon panier'} — Prix NY`, ''];
+  const lines = [`🗽 ${cart.name ? `Panier « ${cart.name} »` : 'Mon panier'} — Vrai Prix NY`, ''];
   cart.items.forEach((it, i) => {
     const c = catOf(it.category);
     const qty = it.qty > 1 ? ` ×${it.qty}` : '';
@@ -391,7 +391,7 @@ function cartText() {
 async function shareCart() {
   if (!cart.items.length) return;
   const text = cartText();
-  const title = cart.name || 'Mon panier Prix NY';
+  const title = cart.name || 'Mon panier Vrai Prix NY';
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
