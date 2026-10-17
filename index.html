@@ -13,58 +13,101 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Démarrage animé -->
+  <div id="splash" class="splash" aria-hidden="true">
+    <div class="splash-mark">
+      <img src="icons/icon-512.png" alt="">
+      <span class="lid lid-l"></span>
+      <span class="lid lid-r"></span>
+      <span class="coin"><span class="coin-face coin-usd">$</span><span class="coin-face coin-eur">€</span></span>
+    </div>
+    <span class="splash-title">Prix NY</span>
+  </div>
+
+  <!-- Skyline de Manhattan (mode sombre) -->
+  <svg class="skyline" viewBox="0 0 400 110" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <path d="M0 110V78h14v-8h10v8h8V62h16v48h6V70h12V54h4v-6h4v6h4v56h8V84h10V66h14v44h6V58l6-10V34l3-4V14h2v16l3 4v14l6 10v52h8V74h12v-6h10v42h6V60h6V44h3V30h4v-8h2V8h1v14h2v8h4v14h3v16h6v50h8V80h16V64h4V50h12v14h4v46h8V72h8v-6h14v44h6V56l14-6v-8h2v-14h1v14h2v8l14 6v54h8V76h14V60h10v50h8V82h12v-8h10v36h8V70h12v40z"/>
+    <g class="windows">
+      <rect x="152" y="62" width="2" height="2"/><rect x="158" y="70" width="2" height="2"/><rect x="152" y="82" width="2" height="2"/>
+      <rect x="216" y="66" width="2" height="2"/><rect x="222" y="76" width="2" height="2"/><rect x="216" y="92" width="2" height="2"/>
+      <rect x="312" y="64" width="2" height="2"/><rect x="320" y="74" width="2" height="2"/><rect x="312" y="88" width="2" height="2"/>
+      <rect x="72" y="62" width="2" height="2"/><rect x="40" y="74" width="2" height="2"/><rect x="262" y="70" width="2" height="2"/>
+    </g>
+  </svg>
+
   <header>
     <div class="brand">
       <img class="brand-mark" src="icons/mark-128.png" alt="" width="44" height="44">
       <h1>Prix NY</h1>
     </div>
+    <button id="settings-open" class="round-btn small" type="button" aria-label="Réglages" title="Réglages">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
     <p id="rate-info" class="rate-pill">Chargement du taux…</p>
   </header>
 
   <div class="cart-bar-wrap">
     <button id="cart-open" class="cart-bar" type="button" aria-label="Ouvrir le panier">
-      <span class="cart-icon"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/></svg><span id="cart-count" class="cart-count">0</span></span>
+      <span id="cart-icon" class="cart-icon"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/></svg><span id="cart-count" class="cart-count">0</span></span>
       <span class="cart-text"><span id="cart-name" class="cart-name">Panier</span><span id="cart-sub" class="cart-sub">vide</span></span>
       <span class="cart-totals"><b id="cart-eur">0,00 €</b><span id="cart-usd">$0.00</span></span>
+      <span class="gauge" id="gauge" hidden><i id="gauge-fill"></i></span>
     </button>
-    <button id="reset-btn" class="round-btn" type="button" aria-label="Réinitialiser le prix et le panier" title="Réinitialiser"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <button id="reset-btn" class="round-btn" type="button" aria-label="Réinitialiser le prix et le panier" title="Réinitialiser">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    </button>
   </div>
 
   <main>
-    <section class="card input-card">
-      <label for="price" class="label">Prix affiché</label>
+    <section class="card glass input-card">
+      <div class="input-head">
+        <span id="price-label" class="label">Prix affiché</span>
+        <div class="segmented mini" role="radiogroup" aria-label="Sens de conversion">
+          <label><input type="radio" name="direction" value="usd" checked><span>$ → €</span></label>
+          <label><input type="radio" name="direction" value="eur"><span>€ → $</span></label>
+        </div>
+      </div>
       <div class="price-row">
-        <span class="prefix">$</span>
-        <input id="price" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="Prix en dollars">
+        <span id="price-prefix" class="prefix">$</span>
+        <input id="price" type="text" inputmode="none" autocomplete="off" placeholder="0" aria-label="Montant">
         <button id="scan-btn" class="icon-btn" type="button" aria-label="Scanner une étiquette" title="Scanner une étiquette">
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
         </button>
       </div>
+      <div id="categories" class="categories" role="radiogroup" aria-label="Catégorie"></div>
+      <div class="stepper-row">
+        <span id="stepper-label" class="stepper-label">Quantité</span>
+        <div class="stepper">
+          <button id="step-minus" type="button" aria-label="Moins">−</button>
+          <output id="step-value">1</output>
+          <button id="step-plus" type="button" aria-label="Plus">+</button>
+        </div>
+      </div>
     </section>
 
     <section class="hero" aria-live="polite">
-      <span class="hero-label">Vous payez</span>
-      <div class="total-eur" id="total-eur">0,00 €</div>
-      <div class="total-usd" id="total-usd">Total : $0.00</div>
+      <span id="hero-label" class="hero-label">Vous payez</span>
+      <div class="total-eur" id="total-main">0,00 €</div>
+      <div class="total-usd" id="total-sub">Total : $0.00</div>
       <dl class="breakdown">
-        <div><dt>Prix</dt><dd id="b-price">$0.00</dd></div>
+        <div><dt id="b-price-label">Prix</dt><dd id="b-price">$0.00</dd></div>
         <div id="b-tax-row"><dt>Taxe</dt><dd id="b-tax">$0.00</dd></div>
         <div id="b-tip-row" hidden><dt>Pourboire</dt><dd id="b-tip">$0.00</dd></div>
+        <div id="b-split-row" hidden><dt>Partage</dt><dd id="b-split"></dd></div>
+        <div id="b-fee-row" hidden><dt>Frais bancaires</dt><dd id="b-fee"></dd></div>
       </dl>
-      <button id="add-btn" class="add-btn" type="button"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Ajouter au panier</span></button>
+      <button id="add-btn" class="add-btn" type="button">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Ajouter au panier</span>
+      </button>
     </section>
 
-    <section class="card options">
+    <section class="card glass options">
       <label class="check">
         <input id="opt-tax" type="checkbox" checked>
         <span class="box" aria-hidden="true"></span>
         <span class="check-text">Sales tax NYC <b id="tax-rate-label">8,875 %</b></span>
       </label>
-      <label class="check sub" id="clothing-row">
-        <input id="opt-clothing" type="checkbox">
-        <span class="box" aria-hidden="true"></span>
-        <span class="check-text">Vêtement / chaussures &lt; <span id="clothing-threshold">110</span> $ <span class="muted">exonéré</span></span>
-      </label>
+      <p id="clothing-note" class="note" hidden>Vêtements et chaussures &lt; <span id="clothing-threshold">110</span> $ par article : exonérés automatiquement.</p>
       <label class="check">
         <input id="opt-tip" type="checkbox">
         <span class="box" aria-hidden="true"></span>
@@ -85,12 +128,31 @@
     <button id="refresh-btn" type="button" class="link">Actualiser</button>
   </footer>
 
+  <!-- Pavé numérique -->
+  <div id="keypad" class="keypad" hidden>
+    <div class="keys">
+      <button type="button" data-key="1">1</button><button type="button" data-key="2">2</button><button type="button" data-key="3">3</button>
+      <button type="button" data-key="4">4</button><button type="button" data-key="5">5</button><button type="button" data-key="6">6</button>
+      <button type="button" data-key="7">7</button><button type="button" data-key="8">8</button><button type="button" data-key="9">9</button>
+      <button type="button" data-key=".">,</button><button type="button" data-key="0">0</button>
+      <button type="button" data-key="back" aria-label="Effacer">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11v14H9l-6-7z"/><path d="M12 9l5 6M17 9l-5 6"/></svg>
+      </button>
+    </div>
+    <div class="keypad-actions">
+      <button id="kp-add" type="button" class="btn secondary">+ Panier</button>
+      <button id="kp-ok" type="button" class="btn">OK</button>
+    </div>
+  </div>
+
   <section id="cart-view" class="sheet" hidden aria-labelledby="cart-title">
     <div class="sheet-head">
       <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
       <h2 id="cart-title">Panier</h2>
-      <button id="saved-open" class="pill-btn" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span>Mes paniers</span><span id="saved-count" class="pill-count"></span></button>
+      <button id="cart-share" class="round-btn" type="button" aria-label="Partager le panier" title="Partager"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg></button>
+      <button id="saved-open" class="pill-btn" type="button" aria-label="Mes paniers"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span id="saved-count" class="pill-count"></span></button>
     </div>
+    <div id="cat-summary" class="cat-summary"></div>
     <ol id="cart-list" class="cart-list"></ol>
     <p id="cart-empty" class="empty">Votre panier est vide.<br>Ajoutez un article depuis l'écran principal.</p>
     <div class="sheet-foot">
@@ -99,6 +161,7 @@
         <b id="cv-eur">0,00 €</b>
         <span id="cv-usd" class="foot-usd"></span>
         <span id="cv-detail" class="foot-detail"></span>
+        <span id="cv-budget" class="foot-budget" hidden></span>
       </div>
       <div class="foot-actions">
         <button id="cart-clear" class="btn secondary" type="button">Vider</button>
@@ -114,6 +177,32 @@
     </div>
     <ul id="saved-list" class="saved-list"></ul>
     <p id="saved-empty" class="empty">Aucun panier enregistré.<br>Depuis le panier, appuyez sur « Enregistrer ».</p>
+  </section>
+
+  <section id="settings-view" class="sheet" hidden aria-labelledby="settings-title">
+    <div class="sheet-head">
+      <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 id="settings-title">Réglages</h2>
+    </div>
+    <div class="settings">
+      <div class="card glass setting">
+        <label for="set-fee" class="label">Frais bancaires de votre carte</label>
+        <div class="setting-row">
+          <input id="set-fee" class="field" type="text" inputmode="decimal" autocomplete="off" placeholder="0">
+          <span class="unit">%</span>
+        </div>
+        <div class="chips" id="fee-presets"></div>
+        <p class="note">Commission de change ajoutée aux montants en euros : 0 % pour Revolut, Wise ou N26, souvent 2 à 3 % pour une carte bancaire classique.</p>
+      </div>
+      <div class="card glass setting">
+        <label for="set-budget" class="label">Budget du panier</label>
+        <div class="setting-row">
+          <input id="set-budget" class="field" type="text" inputmode="decimal" autocomplete="off" placeholder="Aucun">
+          <span class="unit">€</span>
+        </div>
+        <p class="note">Une jauge dans la barre du panier montre la part du budget utilisée. Laissez vide pour la masquer.</p>
+      </div>
+    </div>
   </section>
 
   <dialog id="name-dialog" class="dialog">
