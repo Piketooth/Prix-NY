@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'prix-ny-v1';
+const CACHE = 'prix-ny-v3';
 const SHELL = [
   './',
   'index.html',
@@ -10,6 +10,12 @@ const SHELL = [
   'manifest.webmanifest',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'icons/mark-128.png',
+  'fonts/darker-grotesque-latin-500-normal.woff2',
+  'fonts/darker-grotesque-latin-600-normal.woff2',
+  'fonts/darker-grotesque-latin-700-normal.woff2',
+  'fonts/darker-grotesque-latin-800-normal.woff2',
+  'fonts/darker-grotesque-latin-900-normal.woff2',
 ];
 
 self.addEventListener('install', (e) => {
