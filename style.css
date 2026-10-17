@@ -1,8 +1,8 @@
 @font-face {
-  font-family: "UnifrakturMaguntia";
+  font-family: "Manufacturing Consent";
   font-weight: 400;
   font-display: swap;
-  src: url("fonts/unifrakturmaguntia-latin-400-normal.woff2") format("woff2");
+  src: url("fonts/manufacturing-consent-latin-400-normal.woff2") format("woff2");
 }
 /* Palette PN8 L'Atelier : anthracite #292C33, gris-bleu #7A8499, ambre #FFB734 */
 @font-face {
@@ -1285,18 +1285,20 @@ body.no-scroll > header, body.no-scroll > .cart-bar-wrap, body.no-scroll > main 
 .import-text { font-size: 15px; font-weight: 600; resize: vertical; min-height: 90px; font-family: ui-monospace, monospace; }
 #import-dialog .menu-item { width: 100%; }
 
-/* Bandeau titre façon une de journal (police gothique UnifrakturMaguntia, OFL) */
+/* Bandeau titre façon une de journal (police gothique Manufacturing Consent, OFL) */
 header.masthead { display: block; padding: 14px 0 8px; }
 .mast-top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 8px; }
 .mast-title {
   margin: 0;
   text-align: center;
-  font-family: "UnifrakturMaguntia", "Old English Text MT", serif;
+  font-family: "Manufacturing Consent", "Old English Text MT", serif;
   font-weight: 400;
-  font-size: clamp(24px, 8.1vw, 40px); /* « Vrai Prix New York » sur une ligne */
+  font-size: clamp(22px, 7.6vw, 40px); /* ajustée au pixel près par fitTitle() */
   line-height: 1.05;
   letter-spacing: .3px;
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
 }
 .mast-top .round-btn.small { justify-self: end; }
 .mast-rule { height: 1px; margin: 8px 0 0; background: currentColor; opacity: .55; }
@@ -1314,7 +1316,7 @@ header.masthead { display: block; padding: 14px 0 8px; }
   text-transform: uppercase;
 }
 .mast-edition #rate-info { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.splash-title { font-family: "UnifrakturMaguntia", serif; font-weight: 400; font-size: clamp(30px, 10vw, 44px); letter-spacing: .5px; }
+.splash-title { font-family: "Manufacturing Consent", serif; font-weight: 400; font-size: clamp(30px, 10vw, 44px); letter-spacing: .5px; }
 
 /* Photos personnelles dans la galerie */
 .wp-del {
