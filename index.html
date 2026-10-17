@@ -17,8 +17,6 @@
   <div id="splash" class="splash" aria-hidden="true">
     <div class="splash-mark">
       <img src="icons/icon-512.png" alt="">
-      <span class="lid lid-l"></span>
-      <span class="lid lid-r"></span>
       <span class="coin"><span class="coin-face coin-usd">$</span><span class="coin-face coin-eur">€</span></span>
     </div>
     <span class="splash-title">Prix NY</span>
@@ -26,13 +24,15 @@
 
   <!-- Skyline de Manhattan (mode sombre) -->
   <svg class="skyline" viewBox="0 0 400 110" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-    <path d="M0 110V78h14v-8h10v8h8V62h16v48h6V70h12V54h4v-6h4v6h4v56h8V84h10V66h14v44h6V58l6-10V34l3-4V14h2v16l3 4v14l6 10v52h8V74h12v-6h10v42h6V60h6V44h3V30h4v-8h2V8h1v14h2v8h4v14h3v16h6v50h8V80h16V64h4V50h12v14h4v46h8V72h8v-6h14v44h6V56l14-6v-8h2v-14h1v14h2v8l14 6v54h8V76h14V60h10v50h8V82h12v-8h10v36h8V70h12v40z"/>
-    <g class="windows">
-      <rect x="152" y="62" width="2" height="2"/><rect x="158" y="70" width="2" height="2"/><rect x="152" y="82" width="2" height="2"/>
-      <rect x="216" y="66" width="2" height="2"/><rect x="222" y="76" width="2" height="2"/><rect x="216" y="92" width="2" height="2"/>
-      <rect x="312" y="64" width="2" height="2"/><rect x="320" y="74" width="2" height="2"/><rect x="312" y="88" width="2" height="2"/>
-      <rect x="72" y="62" width="2" height="2"/><rect x="40" y="74" width="2" height="2"/><rect x="262" y="70" width="2" height="2"/>
-    </g>
+    <defs>
+      <linearGradient id="sky-glow" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffb734" stop-opacity="0"/>
+        <stop offset="1" stop-color="#ffb734" stop-opacity="1"/>
+      </linearGradient>
+    </defs>
+    <rect class="glow" x="0" y="20" width="400" height="90" fill="url(#sky-glow)"/>
+    <path id="sky-path" d="M0 110V78h14v-8h10v8h8V62h16v48h6V70h12V54h4v-6h4v6h4v56h8V84h10V66h14v44h6V58l6-10V34l3-4V14h2v16l3 4v14l6 10v52h8V74h12v-6h10v42h6V60h6V44h3V30h4v-8h2V8h1v14h2v8h4v14h3v16h6v50h8V80h16V64h4V50h12v14h4v46h8V72h8v-6h14v44h6V56l14-6v-8h2v-14h1v14h2v8l14 6v54h8V76h14V60h10v50h8V82h12v-8h10v36h8V70h12v40z"/>
+    <g id="sky-windows" class="windows"></g>
   </svg>
 
   <header>
@@ -51,7 +51,6 @@
       <span id="cart-icon" class="cart-icon"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/></svg><span id="cart-count" class="cart-count">0</span></span>
       <span class="cart-text"><span id="cart-name" class="cart-name">Panier</span><span id="cart-sub" class="cart-sub">vide</span></span>
       <span class="cart-totals"><b id="cart-eur">0,00 €</b><span id="cart-usd">$0.00</span></span>
-      <span class="gauge" id="gauge" hidden><i id="gauge-fill"></i></span>
     </button>
     <button id="reset-btn" class="round-btn" type="button" aria-label="Réinitialiser le prix et le panier" title="Réinitialiser">
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
@@ -60,20 +59,15 @@
 
   <main>
     <section class="card glass input-card">
-      <div class="input-head">
-        <span id="price-label" class="label">Prix affiché</span>
-        <div class="segmented mini" role="radiogroup" aria-label="Sens de conversion">
-          <label><input type="radio" name="direction" value="usd" checked><span>$ → €</span></label>
-          <label><input type="radio" name="direction" value="eur"><span>€ → $</span></label>
-        </div>
-      </div>
+      <label for="price" class="label">Prix affiché</label>
       <div class="price-row">
-        <span id="price-prefix" class="prefix">$</span>
+        <span class="prefix">$</span>
         <input id="price" type="text" inputmode="none" autocomplete="off" placeholder="0" aria-label="Montant">
         <button id="scan-btn" class="icon-btn" type="button" aria-label="Scanner une étiquette" title="Scanner une étiquette">
           <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>
         </button>
       </div>
+      <input id="item-name" class="name-field" type="text" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Nom de l'article (facultatif)" aria-label="Nom de l'article (facultatif)">
       <div id="categories" class="categories" role="radiogroup" aria-label="Catégorie"></div>
       <div class="stepper-row">
         <span id="stepper-label" class="stepper-label">Quantité</span>
@@ -101,19 +95,13 @@
       </button>
     </section>
 
-    <section class="card glass options">
+    <section id="tip-card" class="card glass options" hidden>
       <label class="check">
-        <input id="opt-tax" type="checkbox" checked>
-        <span class="box" aria-hidden="true"></span>
-        <span class="check-text">Sales tax NYC <b id="tax-rate-label">8,875 %</b></span>
-      </label>
-      <p id="clothing-note" class="note" hidden>Vêtements et chaussures &lt; <span id="clothing-threshold">110</span> $ par article : exonérés automatiquement.</p>
-      <label class="check">
-        <input id="opt-tip" type="checkbox">
+        <input id="opt-tip" type="checkbox" checked>
         <span class="box" aria-hidden="true"></span>
         <span class="check-text">Pourboire</span>
       </label>
-      <div id="tip-panel" class="sub" hidden>
+      <div id="tip-panel" class="sub">
         <div id="tip-choices" class="chips" role="radiogroup" aria-label="Pourcentage de pourboire"></div>
         <div class="segmented" role="radiogroup" aria-label="Base du pourboire">
           <label><input type="radio" name="tip-basis" value="pre" checked><span>Hors taxe</span></label>
@@ -161,7 +149,6 @@
         <b id="cv-eur">0,00 €</b>
         <span id="cv-usd" class="foot-usd"></span>
         <span id="cv-detail" class="foot-detail"></span>
-        <span id="cv-budget" class="foot-budget" hidden></span>
       </div>
       <div class="foot-actions">
         <button id="cart-clear" class="btn secondary" type="button">Vider</button>
@@ -195,12 +182,13 @@
         <p class="note">Commission de change ajoutée aux montants en euros : 0 % pour Revolut, Wise ou N26, souvent 2 à 3 % pour une carte bancaire classique.</p>
       </div>
       <div class="card glass setting">
-        <label for="set-budget" class="label">Budget du panier</label>
-        <div class="setting-row">
-          <input id="set-budget" class="field" type="text" inputmode="decimal" autocomplete="off" placeholder="Aucun">
-          <span class="unit">€</span>
-        </div>
-        <p class="note">Une jauge dans la barre du panier montre la part du budget utilisée. Laissez vide pour la masquer.</p>
+        <span class="label">Taxe de vente</span>
+        <label class="check">
+          <input id="opt-tax" type="checkbox" checked>
+          <span class="box" aria-hidden="true"></span>
+          <span class="check-text">Sales tax NYC <b id="tax-rate-label">8,875 %</b></span>
+        </label>
+        <p class="note">Ajoutée en caisse à New York. Vêtements et chaussures à moins de <span id="clothing-threshold">110</span> $ par article : exonérés automatiquement (catégorie Vêtements).</p>
       </div>
     </div>
   </section>
