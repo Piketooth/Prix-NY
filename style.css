@@ -977,7 +977,7 @@ body.no-scroll { overflow: hidden; }
   cursor: pointer;
 }
 .toast button[hidden] { display: none; }
-body[data-view="cart-view"] .toast { bottom: calc(250px + env(safe-area-inset-bottom)); }
+body[data-view="cart-view"] .toast, body[data-view="edit-view"] .toast { bottom: calc(250px + env(safe-area-inset-bottom)); }
 @keyframes toast-in { from { transform: translate(-50%, 20px); opacity: 0; } }
 @media (prefers-color-scheme: dark) {
   :root:not(.theme-light) .toast { background: rgba(244, 245, 247, .85); color: var(--anthracite); }
@@ -1171,3 +1171,75 @@ dialog:has(.kbd:not([hidden])) { margin-top: 4vh; }
 /* Curseur d'intensité du givré */
 .range-row { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; }
 .range { flex: 1; accent-color: var(--amber); height: 28px; }
+
+/* Titre de panier renommable */
+.sheet-head h2 { display: flex; min-width: 0; }
+.title-btn {
+  min-width: 0;
+  max-width: 100%;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+}
+.title-btn::after { content: " ✎"; font-size: .55em; opacity: .55; vertical-align: middle; }
+.edit-banner {
+  margin: 0 0 10px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--amber) 22%, transparent);
+  border: 1px solid color-mix(in srgb, var(--amber) 55%, transparent);
+  font-size: 15px;
+  font-weight: 700;
+}
+/* Pastille (catégorie) et montant (prix) cliquables dans le panier */
+button.item-num { border: none; padding: 0; cursor: pointer; font-family: inherit; }
+button.item-amt {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 2px 0 2px 6px;
+  text-align: right;
+  cursor: pointer;
+}
+button.item-amt b { text-decoration: underline dotted rgba(127, 127, 127, .6); text-underline-offset: 4px; }
+.cat-choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.cat-choices .cat:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.cat-choices .cat { padding: 10px 8px; }
+/* Menu d'un panier enregistré */
+.menu-list { display: grid; gap: 6px; }
+.menu-item {
+  border: 1.5px solid var(--line);
+  border-radius: 14px;
+  background: var(--field);
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 18px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item.danger { color: var(--danger); }
+.saved-more {
+  flex: none;
+  width: 40px; height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: var(--field);
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* L'écran de modification s'ouvre par-dessus « Mes paniers » ; le clavier reste au-dessus */
+#edit-view { z-index: 9; }
+.kbd { z-index: 11; }
+/* Écran ouvert par-dessus : l'écran principal est masqué, seule la photo transparaît */
+body.no-scroll > header, body.no-scroll > .cart-bar-wrap, body.no-scroll > main { visibility: hidden; }
