@@ -276,6 +276,15 @@ function step(delta) {
   haptic();
 }
 
+// Titre du bandeau : la plus grande taille (40 px max) qui tient sur une ligne entre le logo et le bouton Réglages.
+function fitTitle() {
+  const el = document.querySelector('.mast-title');
+  if (!el) return;
+  el.style.fontSize = '40px';
+  const ratio = el.clientWidth / el.scrollWidth;
+  if (ratio < 1) el.style.fontSize = `${Math.floor(40 * ratio * 0.97 * 10) / 10}px`;
+}
+
 // Date du jour pour la ligne d'édition du bandeau, façon une de journal.
 function renderEditionDate() {
   $('mast-date').textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -1864,6 +1873,9 @@ async function startVoice() {
 function init() {
   const firstLaunch = runSplash();
   renderEditionDate();
+  fitTitle();
+  document.fonts?.ready.then(fitTitle);
+  window.addEventListener('resize', fitTitle);
   const prefs = store.get('prefs');
   if (prefs) {
     $('opt-tax').checked = prefs.tax ?? true;
