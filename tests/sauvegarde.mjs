@@ -1,0 +1,68 @@
+import { chromium } from 'playwright';
+import fs from 'fs';
+const out = process.argv[2];
+const FIX = new URL('fixtures', import.meta.url).pathname;
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', acceptDownloads: true });
+await ctx.addInitScript(() => { try { sessionStorage.setItem('splash', '1'); if (!localStorage.getItem('s7')) { localStorage.setItem('s7', '1'); localStorage.setItem('settings', JSON.stringify({ wallpaper: 'none' })); } } catch {} });
+const p = await ctx.newPage();
+const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && !/net::|Failed to load|404/.test(m.text()) && errs.push(m.text()));
+await p.route('https://api.frankfurter.dev/**', r => r.fulfill({ json: { amount: 1, base: 'USD', date: '2026-10-16', rates: { EUR: 0.9 } } }));
+await p.route('https://open.er-api.com/**', r => r.abort());
+await p.goto('http://localhost:8765/');
+await p.waitForFunction(() => document.getElementById('rate-info').textContent.includes('0,9'));
+const ok = (label, cond) => console.log(cond ? 'OK  ' : 'FAIL', label);
+const keys = async (s) => { for (const ch of s) await p.click(`[data-key="${ch === ',' ? '.' : ch}"]`); };
+const cls = () => p.evaluate(() => document.documentElement.className + ' | ' + document.body.className);
+const tileLabels = () => p.$$eval('#wp-gallery .wp-label', l => l.map(x => x.textContent));
+
+ok(`titre: ${await p.textContent('.mast-title')}`, (await p.textContent('.mast-title')) === 'Vrai Prix New York');
+ok(`édition: ${await p.textContent('.mast-edition')}`, /1 \$ = 0,9 €/.test(await p.textContent('#rate-info')));
+
+// --- Fond personnalisé
+await p.click('#settings-open'); await p.waitForTimeout(400);
+let tiles = await tileLabels();
+const base = tiles.length;
+ok(`tuiles: ${base}, Ma photo`, tiles.includes('Ma photo'));
+await p.setInputFiles('#wp-file', `${FIX}/bright.jpg`); await p.waitForTimeout(1500);
+tiles = await tileLabels();
+ok(`photo claire ajoutée: ${tiles}`, tiles.length === base + 1);
+ok(`thème clair: ${await cls()}`, (await cls()).includes('theme-light'));
+const sel = await p.evaluate(() => JSON.parse(localStorage.getItem('settings')).wallpaper);
+ok(`sélectionnée: ${sel}`, sel.startsWith('custom-'));
+await p.screenshot({ path: `${out}/v7-wp-settings.png` });
+await p.setInputFiles('#wp-file', `${FIX}/dark.jpg`); await p.waitForTimeout(1500);
+ok(`thème sombre avec photo sombre: ${await cls()}`, (await cls()).includes('theme-dark'));
+await p.goBack(); await p.waitForTimeout(400);
+await p.screenshot({ path: `${out}/v7-main-custom.png` });
+await p.reload(); await p.waitForTimeout(1500);
+const bg = await p.evaluate(() => [...document.querySelectorAll('*')].map(e => getComputedStyle(e).backgroundImage).filter(x => x.includes('blob:')).length);
+ok(`persistance après rechargement: ${bg} fond blob`, bg > 0);
+await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#wp-gallery .wp-tile .wp-del'); await p.waitForTimeout(500);
+tiles = await tileLabels();
+ok(`suppression: ${tiles.length}`, tiles.length === base + 1);
+await p.goBack(); await p.waitForTimeout(400);
+
+// --- Export / import
+await p.click('#price'); await keys('25'); await p.click('#kp-add'); await p.waitForTimeout(1200);
+if (await p.isVisible('#keypad')) { await p.goBack(); await p.waitForTimeout(200); }
+await p.click('#cart-open'); await p.waitForTimeout(400); await p.click('#saved-open'); await p.waitForTimeout(400);
+const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#export-btn')]);
+const path = `${out}/backup.json`; await dl.saveAs(path);
+const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+ok(`export ${dl.suggestedFilename()}: ${data.current.items.length} article`, data.app === 'vrai-prix-ny' && data.current.items.length === 1);
+await p.click('#import-btn'); await p.waitForTimeout(300);
+await p.fill('#import-text', fs.readFileSync(path, 'utf8'));
+await p.click('#import-dialog button[value=ok]'); await p.waitForTimeout(400);
+let names = await p.$$eval('.saved-main b', l => l.map(x => x.textContent));
+ok(`import collé: ${names}`, names.length === 1);
+await p.screenshot({ path: `${out}/v7-saved.png` });
+await p.click('#import-btn'); await p.waitForTimeout(300);
+await p.setInputFiles('#import-file', path); await p.waitForTimeout(500);
+names = await p.$$eval('.saved-main b', l => l.map(x => x.textContent));
+console.log('     après réimport fichier:', names, await p.textContent('#toast'));
+await p.click('#import-btn'); await p.fill('#import-text', '{"a":1}'); await p.click('#import-dialog button[value=ok]'); await p.waitForTimeout(300);
+ok(`erreur: ${await p.textContent('#toast')}`, (await p.textContent('#toast')).includes('pas une sauvegarde'));
+ok(`erreurs JS: ${errs}`, errs.length === 0);
+await b.close();

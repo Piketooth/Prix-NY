@@ -4,8 +4,9 @@
   "private": true,
   "description": "Convertit les prix de New York en euros, taxes et pourboire compris.",
   "scripts": {
-    "www": "rm -rf www && mkdir www && cp -r index.html style.css app.js keyboard.js sw.js taxes.json manifest.webmanifest icons fonts sounds dict wallpapers www/",
-    "sync": "npm run www && cap sync android"
+    "www": "rm -rf www && mkdir www && cp -r index.html style.css app.js keyboard.js sw.js taxes.json manifest.webmanifest icons fonts sounds dict wallpapers vendor www/",
+    "sync": "npm run www && cap sync android",
+    "test": "node tests/run.mjs"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "7.0.1",
@@ -15,6 +16,7 @@
     "@capacitor/share": "8.0.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "8.5.3"
+    "@capacitor/cli": "8.5.3",
+    "playwright": "^1.56.1"
   }
 }

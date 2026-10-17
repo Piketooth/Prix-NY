@@ -1,3 +1,9 @@
+@font-face {
+  font-family: "UnifrakturMaguntia";
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/unifrakturmaguntia-latin-400-normal.woff2") format("woff2");
+}
 /* Palette PN8 L'Atelier : anthracite #292C33, gris-bleu #7A8499, ambre #FFB734 */
 @font-face {
   font-family: "Darker Grotesque";
@@ -1243,3 +1249,57 @@ button.item-amt b { text-decoration: underline dotted rgba(127, 127, 127, .6); t
 .kbd { z-index: 11; }
 /* Écran ouvert par-dessus : l'écran principal est masqué, seule la photo transparaît */
 body.no-scroll > header, body.no-scroll > .cart-bar-wrap, body.no-scroll > main { visibility: hidden; }
+
+/* Sauvegarde des paniers */
+.saved-actions { display: flex; gap: 10px; padding: 8px 0 4px; }
+.saved-actions .btn { padding: 12px; font-size: 18px; }
+#saved-view .btn.secondary { background: var(--glass); color: var(--text); border: 1.5px solid var(--glass-edge); }
+.saved-note { text-align: center; padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+.import-label { margin: 14px 0 6px; }
+.import-text { font-size: 15px; font-weight: 600; resize: vertical; min-height: 90px; font-family: ui-monospace, monospace; }
+#import-dialog .menu-item { width: 100%; }
+
+/* Bandeau titre façon une de journal (police gothique UnifrakturMaguntia, OFL) */
+header.masthead { display: block; padding: 14px 0 8px; }
+.mast-top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 8px; }
+.mast-title {
+  margin: 0;
+  text-align: center;
+  font-family: "UnifrakturMaguntia", "Old English Text MT", serif;
+  font-weight: 400;
+  font-size: clamp(24px, 8.1vw, 40px); /* « Vrai Prix New York » sur une ligne */
+  line-height: 1.05;
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.mast-top .round-btn.small { justify-self: end; }
+.mast-rule { height: 1px; margin: 8px 0 0; background: currentColor; opacity: .55; }
+.mast-rule.double { height: 4px; margin: 0; background: none; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; opacity: .55; }
+.mast-edition {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
+  margin: 0;
+  padding: 4px 2px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.mast-edition #rate-info { flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.splash-title { font-family: "UnifrakturMaguntia", serif; font-weight: 400; font-size: clamp(30px, 10vw, 44px); letter-spacing: .5px; }
+
+/* Photos personnelles dans la galerie */
+.wp-del {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: rgba(23, 25, 29, .75);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 24px;
+  text-align: center;
+}
