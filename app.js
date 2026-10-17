@@ -48,11 +48,10 @@ const state = {
   taxes: DEFAULT_TAXES,
   fx: null,
   tipPct: DEFAULT_TAXES.tip.default,
-  direction: 'usd', // 'usd' : prix en $ → €, 'eur' : budget en € → prix max en $
   category: 'shop',
   qty: 1,
   split: 1,
-  settings: { fee: 0, budget: null },
+  settings: { fee: 0 },
 };
 
 const store = {
@@ -92,26 +91,10 @@ function compute({ unit, qty, split, category, opts }, taxes) {
   return { unit, qty, split, category, opts, taxRate, exempt, price, tax, tip, bill, share: bill / split };
 }
 
-// Conversion inverse : prix unitaire maximal pour que ma part fasse `share` dollars.
-function unitForShare(share, base, taxes) {
-  const factor = (taxRate) => {
-    const t = base.opts.tax ? taxRate : 0;
-    const tipF = base.opts.tip ? base.opts.tipPct * (base.opts.tipBasis === 'post' ? 1 + t : 1) : 0;
-    return 1 + t + tipF;
-  };
-  const bill = share * base.split;
-  let unit = bill / factor(taxes.salesTax.rate) / base.qty;
-  if (base.category === 'clothes') {
-    const exemptUnit = bill / factor(taxes.clothing.rate) / base.qty;
-    if (exemptUnit < taxes.clothing.threshold) unit = exemptUnit;
-  }
-  return Math.floor(unit * 100 + 1e-6) / 100;
-}
-
 function readOptions() {
   return {
     tax: $('opt-tax').checked,
-    tip: $('opt-tip').checked,
+    tip: state.category === 'food' && $('opt-tip').checked, // pourboire : Resto uniquement
     tipPct: state.tipPct,
     tipBasis: document.querySelector('input[name="tip-basis"]:checked').value,
   };
@@ -125,13 +108,7 @@ function currentItem() {
     category: state.category,
     opts: readOptions(),
   };
-  const amount = parsePrice($('price').value);
-  let unit = amount;
-  if (state.direction === 'eur') {
-    const rate = effRate();
-    unit = rate && amount ? unitForShare(amount / rate, base, state.taxes) : 0;
-  }
-  return { ...compute({ unit, ...base }, state.taxes), amount };
+  return compute({ unit: parsePrice($('price').value), ...base }, state.taxes);
 }
 
 // --- Affichage de l'article en cours ----------------------------------------
@@ -169,28 +146,19 @@ const showEur = (el, usdAmount) => {
 function render() {
   const it = currentItem();
   const food = state.category === 'food';
-  const reverse = state.direction === 'eur';
   const fee = state.settings.fee;
 
-  $('clothing-note').hidden = state.category !== 'clothes';
+  $('tip-card').hidden = !food;
   $('tip-panel').hidden = !it.opts.tip;
-  $('price-label').textContent = reverse ? 'Mon budget' : 'Prix affiché';
-  $('price-prefix').textContent = reverse ? '€' : '$';
   $('stepper-label').textContent = food ? 'Personnes' : 'Quantité';
   $('step-value').textContent = food ? state.split : state.qty;
   $('step-minus').disabled = (food ? state.split : state.qty) <= 1;
 
-  if (reverse) {
-    $('hero-label').textContent = it.qty > 1 ? 'Prix étiquette max par article' : 'Prix étiquette max';
-    animateValue($('total-main'), it.unit, (v) => usd.format(v));
-    $('total-sub').textContent = it.amount ? `pour ${eur.format(it.amount)} tout compris` : 'Saisissez votre budget en euros';
-  } else {
-    $('hero-label').textContent = it.split > 1 ? 'Votre part' : 'Vous payez';
-    showEur($('total-main'), it.share);
-    $('total-sub').textContent = it.split > 1
-      ? `Votre part : ${usd.format(it.share)} · addition ${usd.format(it.bill)}`
-      : `Total : ${usd.format(it.bill)}`;
-  }
+  $('hero-label').textContent = it.split > 1 ? 'Votre part' : 'Vous payez';
+  showEur($('total-main'), it.share);
+  $('total-sub').textContent = it.split > 1
+    ? `Votre part : ${usd.format(it.share)} · addition ${usd.format(it.bill)}`
+    : `Total : ${usd.format(it.bill)}`;
 
   $('b-price-label').textContent = it.qty > 1 ? `Prix (${it.qty} × ${usd.format(it.unit)})` : 'Prix';
   $('b-price').textContent = usd.format(it.price);
@@ -203,7 +171,7 @@ function render() {
   $('b-fee-row').hidden = !(fee > 0 && state.fx);
   if (state.fx) $('b-fee').textContent = `${eur.format(it.share * state.fx.rate * fee / 100)} (${pct(fee / 100)})`;
 
-  store.set('prefs', { ...it.opts, category: state.category });
+  store.set('prefs', { ...it.opts, tip: $('opt-tip').checked, category: state.category });
 }
 
 function renderCategories() {
@@ -226,9 +194,8 @@ function setCategory(id) {
   const was = state.category;
   if (id === was) return;
   state.category = id;
-  // Au resto, le pourboire est la règle ; on le retire en quittant la catégorie.
+  // Au resto, le pourboire est la règle (il n'est proposé que dans cette catégorie).
   if (id === 'food') $('opt-tip').checked = true;
-  else if (was === 'food') $('opt-tip').checked = false;
   renderCategories();
   render();
   haptic();
@@ -437,22 +404,6 @@ function renderCart() {
   $('cart-usd').textContent = usd.format(t.share);
   $('cart-open').classList.toggle('empty-cart', !n);
 
-  // Budget
-  const budget = state.settings.budget;
-  const spent = rate ? t.share * rate : null;
-  const hasBudget = budget > 0 && spent != null;
-  $('gauge').hidden = !hasBudget;
-  $('cv-budget').hidden = !hasBudget;
-  if (hasBudget) {
-    const ratio = spent / budget;
-    $('gauge-fill').style.width = `${Math.min(100, ratio * 100)}%`;
-    $('gauge').className = `gauge${ratio > 1 ? ' over' : ratio >= 0.8 ? ' warn' : ''}`;
-    $('cv-budget').textContent = ratio > 1
-      ? `Budget ${eur.format(budget)} · dépassé de ${eur.format(spent - budget)}`
-      : `Budget ${eur.format(budget)} · reste ${eur.format(budget - spent)}`;
-    $('cv-budget').classList.toggle('over', ratio > 1);
-  }
-
   $('cart-title').textContent = cart.name || 'Panier';
   showEur($('cv-eur'), t.share);
   $('cv-usd').textContent = usd.format(t.share);
@@ -636,18 +587,19 @@ function flyToCart(fromEl) {
 }
 
 function addToCart(fromEl = $('add-btn')) {
-  const it = currentItem();
-  if (!(it.unit > 0)) {
+  const item = currentItem();
+  if (!(item.unit > 0)) {
     if (keypadOpen()) haptic('warning');
     else $('price').focus();
-    toast(state.direction === 'eur' ? 'Saisissez d’abord votre budget' : 'Saisissez d’abord un prix');
+    toast('Saisissez d’abord un prix');
     return;
   }
-  const { amount, ...item } = it;
   const id = uid();
-  cart.items.push({ id, name: '', ...item });
+  const name = $('item-name').value.trim(); // vide : « Article N » affiché automatiquement
+  cart.items.push({ id, name, ...item });
   const n = cart.items.length;
   $('price').value = '';
+  $('item-name').value = '';
   state.qty = 1;
   state.split = 1;
   render();
@@ -660,7 +612,7 @@ function addToCart(fromEl = $('add-btn')) {
     bar.classList.add('bump');
     haptic('success');
   });
-  toast(`Article ${n} ajouté au panier`, 'Annuler', () => {
+  toast(`${name || `Article ${n}`} ajouté au panier`, 'Annuler', () => {
     cart.items = cart.items.filter((x) => x.id !== id);
     saveCart();
   });
@@ -789,18 +741,12 @@ function renderFeePresets() {
 
 function initSettings() {
   const s = store.get('settings');
-  if (s) state.settings = { ...state.settings, ...s };
+  if (s) state.settings.fee = s.fee || 0;
   $('set-fee').value = state.settings.fee ? String(state.settings.fee).replace('.', ',') : '';
-  $('set-budget').value = state.settings.budget ? String(state.settings.budget).replace('.', ',') : '';
   renderFeePresets();
   $('set-fee').addEventListener('input', () => {
     state.settings.fee = Math.min(10, parsePrice($('set-fee').value));
     renderFeePresets();
-    applySettings();
-  });
-  $('set-budget').addEventListener('input', () => {
-    const b = parsePrice($('set-budget').value);
-    state.settings.budget = b > 0 ? b : null;
     applySettings();
   });
 }
@@ -925,6 +871,30 @@ function toast(msg, actionLabel, action) {
   el.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.hidden = true; }, actionLabel ? 5000 : 2500);
+}
+
+// --- Skyline : fenêtres éclairées réparties dans les immeubles -----------------
+
+function lightWindows() {
+  const path = $('sky-path');
+  const g = $('sky-windows');
+  if (!path?.isPointInFill) return;
+  const ns = 'http://www.w3.org/2000/svg';
+  const pt = $('sky-path').ownerSVGElement.createSVGPoint();
+  let seed = 7; // pseudo-aléatoire stable d'un lancement à l'autre
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let x = 3; x < 400; x += 5) {
+    for (let y = 16; y < 106; y += 6) {
+      pt.x = x + 1; pt.y = y + 1;
+      if (!path.isPointInFill(pt) || rnd() > 0.22) continue;
+      const r = document.createElementNS(ns, 'rect');
+      r.setAttribute('x', x); r.setAttribute('y', y);
+      r.setAttribute('width', 2); r.setAttribute('height', 2.5);
+      r.style.animationDelay = `${(rnd() * 8).toFixed(2)}s`;
+      r.style.animationDuration = `${(4 + rnd() * 6).toFixed(2)}s`;
+      g.append(r);
+    }
+  }
 }
 
 // --- Démarrage animé --------------------------------------------------------
@@ -1068,8 +1038,6 @@ async function capture() {
 }
 
 function usePrice(p) {
-  document.querySelector('input[name="direction"][value="usd"]').checked = true;
-  state.direction = 'usd';
   $('price').value = p.toFixed(2).replace('.', ',');
   closeScanner();
   render();
@@ -1080,6 +1048,7 @@ function usePrice(p) {
 
 function init() {
   runSplash();
+  lightWindows();
   const prefs = store.get('prefs');
   if (prefs) {
     $('opt-tax').checked = prefs.tax ?? true;
@@ -1100,12 +1069,7 @@ function init() {
   $('price').addEventListener('keydown', (e) => { if (e.key === 'Enter') addToCart(); });
   document.querySelectorAll('#opt-tax, #opt-tip, input[name="tip-basis"]')
     .forEach((el) => el.addEventListener('change', () => { render(); haptic(); }));
-  document.querySelectorAll('input[name="direction"]').forEach((el) => el.addEventListener('change', () => {
-    state.direction = el.value;
-    $('price').value = '';
-    render();
-    haptic();
-  }));
+  $('item-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('item-name').blur(); });
   $('step-minus').addEventListener('click', () => step(-1));
   $('step-plus').addEventListener('click', () => step(1));
   $('refresh-btn').addEventListener('click', () => { loadRate(); loadTaxes(); });
