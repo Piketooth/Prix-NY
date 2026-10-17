@@ -45,7 +45,7 @@
 
   <div class="cart-bar-wrap">
     <button id="cart-open" class="cart-bar" type="button" aria-label="Ouvrir le panier">
-      <span id="cart-icon" class="cart-icon"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/></svg><span id="cart-count" class="cart-count">0</span></span>
+      <span id="cart-icon" class="cart-icon"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/></svg><span id="cart-count" class="cart-count">0</span></span>
       <span class="cart-text"><span id="cart-name" class="cart-name">Panier</span><span id="cart-sub" class="cart-sub">vide</span></span>
       <span class="cart-totals"><b id="cart-eur">0,00 €</b><span id="cart-usd">$0.00</span></span>
     </button>
@@ -80,8 +80,8 @@
     <section class="hero" aria-live="polite">
       <span id="hero-label" class="hero-label">Vous payez</span>
       <div class="total-eur" id="total-main">0,00 €</div>
-      <div class="total-usd" id="total-sub">Total : $0.00</div>
-      <dl class="breakdown">
+      <div class="total-usd"><span id="total-sub">Total : $0.00</span><button id="detail-btn" class="detail-btn" type="button" aria-expanded="false" aria-controls="breakdown">Détail</button></div>
+      <dl id="breakdown" class="breakdown" hidden>
         <div><dt id="b-price-label">Prix</dt><dd id="b-price">$0.00</dd></div>
         <div id="b-tax-row"><dt>Taxe</dt><dd id="b-tax">$0.00</dd></div>
         <div id="b-tip-row" hidden><dt>Pourboire</dt><dd id="b-tip">$0.00</dd></div>
@@ -98,15 +98,12 @@
       </div>
     </section>
 
-    <section id="tip-card" class="card glass options" hidden>
-      <label class="check">
-        <input id="opt-tip" type="checkbox" checked>
-        <span class="box" aria-hidden="true"></span>
-        <span class="check-text">Pourboire</span>
-      </label>
-      <div id="tip-panel" class="sub">
-        <div id="tip-choices" class="chips" role="radiogroup" aria-label="Pourcentage de pourboire"></div>
-        <div class="segmented" role="radiogroup" aria-label="Base du pourboire">
+    <section id="tip-card" class="card glass tip-card" hidden>
+      <input id="opt-tip" type="checkbox" checked hidden>
+      <div id="tip-choices" class="chips tip-choices" role="radiogroup" aria-label="Pourboire"></div>
+      <div class="tip-row">
+        <span class="tip-title">Pourboire</span>
+        <div id="tip-panel" class="segmented" role="radiogroup" aria-label="Base du pourboire">
           <label><input type="radio" name="tip-basis" value="pre" checked><span>Hors taxe</span></label>
           <label><input type="radio" name="tip-basis" value="post"><span>Taxe comprise</span></label>
         </div>

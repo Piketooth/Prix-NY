@@ -28,6 +28,7 @@ const RUNS = [
   ['saisie.mjs', 'light'], ['saisie.mjs', 'dark'],
   ['panier.mjs', 'light'], ['panier.mjs', 'dark'],
   ['edition.mjs', 'light'], ['edition.mjs', 'dark'],
+  ['ecran.mjs', 'light'], ['ecran.mjs', 'dark'],
   ['sauvegarde.mjs'], ['ocr.mjs'],
 ];
 let failed = 0;

@@ -162,7 +162,11 @@ function render() {
 
   $('tip-card').hidden = !food;
   renderCatInfo(it);
-  $('tip-panel').hidden = !it.opts.tip;
+  $('tip-panel').classList.toggle('off', !it.opts.tip);
+  $('tip-choices').querySelectorAll('.chip').forEach((b) => {
+    const c = Number(b.dataset.pct);
+    b.setAttribute('aria-checked', String(it.opts.tip ? c === it.opts.tipPct : c === 0));
+  });
   $('stepper-label').textContent = food ? 'Personnes' : 'Quantité';
   $('step-value').textContent = food ? state.split : state.qty;
   $('step-minus').disabled = (food ? state.split : state.qty) <= 1;
@@ -185,6 +189,13 @@ function render() {
   if (baseRate()) $('b-fee').textContent = `${eur.format(it.share * baseRate() * fee / 100)} (${pct(fee / 100)})`;
 
   store.set('prefs', { ...it.opts, tip: $('opt-tip').checked, category: state.category });
+}
+
+// Détail du calcul (prix, taxe, pourboire, frais) replié sous le total ; le choix est mémorisé.
+function setDetail(open) {
+  $('breakdown').hidden = !open;
+  $('detail-btn').setAttribute('aria-expanded', String(open));
+  store.set('detailOpen', open);
 }
 
 function renderCategories() {
@@ -274,11 +285,13 @@ function renderEditionDate() {
 function renderRateInfo(offline) {
   const fx = state.fx;
   const el = $('rate-info');
-  const fee = state.settings.fee ? ` · frais ${pct(state.settings.fee / 100)}` : '';
+  // Court dans le bandeau (« +2 % »), en toutes lettres dans l'infobulle.
+  const feeShort = state.settings.fee ? ` · +${pct(state.settings.fee / 100)}` : '';
+  const fee = state.settings.fee ? ` · frais bancaires ${pct(state.settings.fee / 100)}` : '';
   renderRateSetting();
   if (state.settings.rate) {
     const r = state.settings.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
-    el.textContent = `1 $ = ${r} € · perso${fee}`;
+    el.textContent = `1 $ = ${r} € · perso${feeShort}`;
     el.title = `Taux personnalisé : 1 $ = ${r} €${fee}`;
     return;
   }
@@ -289,7 +302,7 @@ function renderRateInfo(offline) {
   }
   const rate = fx.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
   const d = new Date(fx.date + 'T12:00:00');
-  el.textContent = `1 $ = ${rate} € · ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}${fee}${offline ? ' · hors ligne' : ''}`;
+  el.textContent = `1 $ = ${rate} € · ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}${feeShort}${offline ? ' · hors ligne' : ''}`;
   el.title = `Taux de référence ${fx.source} du ${d.toLocaleDateString('fr-FR')}${fee}${offline ? ' (hors ligne)' : ''}`;
 }
 
@@ -301,16 +314,17 @@ function renderTaxInfo() {
   const box = $('tip-choices');
   box.replaceChildren();
   if (!t.tip.choices.includes(state.tipPct)) state.tipPct = t.tip.default;
-  for (const c of t.tip.choices) {
+  // « Aucun » (0) remplace l'ancienne case à cocher du pourboire.
+  for (const c of [0, ...t.tip.choices]) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'chip';
+    b.dataset.pct = c;
     b.setAttribute('role', 'radio');
-    b.setAttribute('aria-checked', String(c === state.tipPct));
-    b.textContent = pct(c);
+    b.textContent = c ? pct(c) : 'Aucun';
     b.addEventListener('click', () => {
-      state.tipPct = c;
-      box.querySelectorAll('.chip').forEach((el) => el.setAttribute('aria-checked', String(el === b)));
+      $('opt-tip').checked = c > 0;
+      if (c) state.tipPct = c;
       render();
       haptic();
     });
@@ -1883,6 +1897,8 @@ function init() {
   $('scan-btn').addEventListener('click', openScanner);
   $('voice-btn').addEventListener('click', startVoice);
   $('cat-info').addEventListener('click', showCatInfo);
+  setDetail(store.get('detailOpen') === true);
+  $('detail-btn').addEventListener('click', () => { setDetail($('breakdown').hidden); haptic(); });
   $('add-to-btn').addEventListener('click', addToSaved);
   $('scan-close').addEventListener('click', closeScanner);
   $('scan-capture').addEventListener('click', capture);
