@@ -1,0 +1,19 @@
+{
+  "updated": "2026-10-17",
+  "source": "https://www.tax.ny.gov/pdf/publications/sales/pub718c_224.pdf",
+  "salesTax": {
+    "label": "Sales tax NYC",
+    "rate": 0.08875,
+    "detail": "État de NY 4 % + ville de NY 4,5 % + MCTD 0,375 %"
+  },
+  "clothing": {
+    "label": "Vêtement / chaussures < 110 $",
+    "threshold": 110,
+    "rate": 0,
+    "detail": "Vêtements et chaussures de moins de 110 $ par article : exonérés à NYC"
+  },
+  "tip": {
+    "choices": [0.15, 0.18, 0.20, 0.22, 0.25],
+    "default": 0.20
+  }
+}

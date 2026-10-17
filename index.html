@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b3d91">
+  <meta name="description" content="Convertit les prix de New York en euros, taxes et pourboire compris.">
+  <title>Prix NY</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Prix NY</h1>
+    <p id="rate-info" class="muted">Chargement du taux…</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <label for="price" class="label">Prix affiché (USD)</label>
+      <div class="price-row">
+        <span class="prefix">$</span>
+        <input id="price" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" aria-label="Prix en dollars">
+        <button id="scan-btn" class="icon-btn" type="button" aria-label="Scanner une étiquette" title="Scanner une étiquette">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path fill="currentColor" d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm8-3h-3.2l-1.8-2H9L7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zm-8 11a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <section class="card options">
+      <label class="check">
+        <input id="opt-tax" type="checkbox" checked>
+        <span>Sales tax NYC <b id="tax-rate-label">8,875 %</b></span>
+      </label>
+      <label class="check sub" id="clothing-row">
+        <input id="opt-clothing" type="checkbox">
+        <span>Vêtement / chaussures &lt; <span id="clothing-threshold">110</span> $ <span class="muted">(exonéré)</span></span>
+      </label>
+      <label class="check">
+        <input id="opt-tip" type="checkbox">
+        <span>Pourboire</span>
+      </label>
+      <div id="tip-panel" class="sub" hidden>
+        <div id="tip-choices" class="chips" role="radiogroup" aria-label="Pourcentage de pourboire"></div>
+        <div class="basis" role="radiogroup" aria-label="Base du pourboire">
+          <span class="muted">Calculé sur :</span>
+          <label><input type="radio" name="tip-basis" value="pre" checked> prix hors taxe</label>
+          <label><input type="radio" name="tip-basis" value="post"> prix taxe comprise</label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card result" aria-live="polite">
+      <div class="total-eur" id="total-eur">0,00 €</div>
+      <div class="total-usd muted" id="total-usd">Total : $0.00</div>
+      <dl class="breakdown">
+        <div><dt>Prix</dt><dd id="b-price">$0.00</dd></div>
+        <div id="b-tax-row"><dt>Taxe</dt><dd id="b-tax">$0.00</dd></div>
+        <div id="b-tip-row" hidden><dt>Pourboire</dt><dd id="b-tip">$0.00</dd></div>
+      </dl>
+    </section>
+  </main>
+
+  <footer class="muted">
+    <span id="tax-info"></span>
+    <button id="refresh-btn" type="button" class="link">Actualiser</button>
+  </footer>
+
+  <div id="scanner" class="scanner" hidden>
+    <video id="video" playsinline muted></video>
+    <div class="frame" aria-hidden="true"></div>
+    <p id="scan-status" class="scan-status">Cadrez le prix dans le rectangle, puis appuyez sur Capturer.</p>
+    <div id="scan-results" class="chips scan-chips"></div>
+    <div class="scan-actions">
+      <button id="scan-close" type="button" class="btn secondary">Fermer</button>
+      <button id="scan-capture" type="button" class="btn">Capturer</button>
+    </div>
+    <canvas id="canvas" hidden></canvas>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
