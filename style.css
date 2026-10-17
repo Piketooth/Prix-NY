@@ -79,16 +79,7 @@ header {
   padding: 20px 0 16px;
 }
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark {
-  display: grid; place-items: center;
-  width: 36px; height: 36px;
-  border-radius: 11px;
-  background: var(--amber);
-  color: var(--on-amber);
-  font-weight: 900;
-  font-size: 17px;
-  letter-spacing: -.5px;
-}
+.brand-mark { width: 44px; height: 44px; display: block; }
 h1 { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -.5px; }
 .rate-pill {
   margin: 0;
