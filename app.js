@@ -52,7 +52,8 @@ const state = {
   split: 1,
   // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
   // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch' },
+  // adaptive : couleurs selon la photo ; frost : intensité du givré (0 léger → 100 fort)
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 30 },
 };
 
 const store = {
@@ -873,6 +874,8 @@ function initSettings() {
     if (s.voiceLang === 'en-US') state.settings.voiceLang = 'en-US';
     if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper)) state.settings.wallpaper = s.wallpaper;
     if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
+    if (s.adaptive === false) state.settings.adaptive = false;
+    if (Number.isFinite(s.frost)) state.settings.frost = Math.min(100, Math.max(0, s.frost));
   }
   $('set-rate').value = state.settings.rate ? String(state.settings.rate).replace('.', ',') : '';
   $('set-rate').addEventListener('input', () => {
@@ -887,6 +890,20 @@ function initSettings() {
     haptic();
     toast('Cours officiel rétabli');
   });
+  $('opt-adaptive').checked = state.settings.adaptive;
+  $('opt-adaptive').addEventListener('change', () => {
+    state.settings.adaptive = $('opt-adaptive').checked;
+    store.set('settings', state.settings);
+    applyTheme();
+    haptic();
+  });
+  $('set-frost').value = state.settings.frost;
+  $('set-frost').addEventListener('input', () => {
+    state.settings.frost = Number($('set-frost').value);
+    applyFrost();
+  });
+  $('set-frost').addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
+  applyFrost();
   $('opt-sound').checked = state.settings.sound;
   $('opt-sound').addEventListener('change', () => { state.settings.sound = $('opt-sound').checked; applySettings(); haptic(); });
   document.querySelector(`input[name="voice-lang"][value="${state.settings.voiceLang}"]`).checked = true;
@@ -1035,14 +1052,14 @@ function toast(msg, actionLabel, action) {
 // --- Fonds d'écran ------------------------------------------------------------
 
 const WALLPAPERS = [
-  { id: 'central-park', label: 'Central Park' },
-  { id: 'taxis', label: 'Taxis' },
-  { id: 'brooklyn-bridge', label: 'Brooklyn Bridge' },
-  { id: 'empire-state', label: 'Empire State' },
-  { id: 'liberty', label: 'Statue de la Liberté' },
-  { id: 'radio-city', label: 'Radio City' },
-  { id: 'times-square', label: 'Times Square' },
-  { id: 'brooklyn-promenade', label: 'Promenade de Brooklyn' },
+  { id: 'central-park', label: 'Central Park', tone: 'dark' },
+  { id: 'taxis', label: 'Taxis', tone: 'dark' },
+  { id: 'brooklyn-bridge', label: 'Brooklyn Bridge', tone: 'dark' },
+  { id: 'empire-state', label: 'Empire State', tone: 'dark' },
+  { id: 'liberty', label: 'Statue de la Liberté', tone: 'dark' },
+  { id: 'radio-city', label: 'Radio City', tone: 'dark' },
+  { id: 'times-square', label: 'Times Square', tone: 'dark' },
+  { id: 'brooklyn-promenade', label: 'Promenade de Brooklyn', tone: 'dark' },
 ];
 const WP_INTERVALS = [
   { v: 'launch', label: 'À l’ouverture' },
@@ -1057,6 +1074,21 @@ let wpCurrent = null;
 let wpLayer = 'a';
 let wpTimer = null;
 
+// Thème imposé par la photo affichée (option « Couleurs adaptées à la photo »).
+function applyTheme() {
+  const wp = document.body.classList.contains('has-wp') && WALLPAPERS.find((w) => w.id === wpCurrent);
+  const tone = state.settings.adaptive && wp ? wp.tone : null;
+  document.documentElement.classList.toggle('theme-dark', tone === 'dark');
+  document.documentElement.classList.toggle('theme-light', tone === 'light');
+}
+
+// Givré : opacité des cartes (55 % à 85 %) et flou (6 à 28 px).
+function applyFrost() {
+  const f = state.settings.frost / 100;
+  document.documentElement.style.setProperty('--glass-a', (0.55 + 0.3 * f).toFixed(2));
+  document.documentElement.style.setProperty('--blur', `${Math.round(6 + 22 * f)}px`);
+}
+
 function showWallpaper(id) {
   if (id === wpCurrent) return;
   wpCurrent = id;
@@ -1064,6 +1096,7 @@ function showWallpaper(id) {
     $('wp-a').classList.remove('on');
     $('wp-b').classList.remove('on');
     document.body.classList.remove('has-wp');
+    applyTheme();
     return;
   }
   const img = new Image();
@@ -1075,8 +1108,9 @@ function showWallpaper(id) {
     $(`wp-${wpLayer}`).classList.remove('on');
     wpLayer = next;
     document.body.classList.add('has-wp');
+    applyTheme();
   };
-  img.onerror = () => { if (wpCurrent === id) { wpCurrent = null; document.body.classList.remove('has-wp'); } };
+  img.onerror = () => { if (wpCurrent === id) { wpCurrent = null; document.body.classList.remove('has-wp'); applyTheme(); } };
   img.src = wpFile(id);
 }
 
