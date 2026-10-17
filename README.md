@@ -9,6 +9,8 @@ Appli web installable (PWA) pour Android : elle convertit un prix affiché à Ne
 - **Réglages** : taux de change personnalisé (avec retour au cours officiel), frais bancaires de la carte, sales tax NYC, langue de la saisie vocale, son au démarrage.
 - **Panier** : ajout de l'article en cours, rappel du nombre d'articles et du total (€ et $) en haut de l'écran, articles numérotés et renommables, quantité modifiable, totaux par catégorie, glisser vers la gauche pour supprimer (avec annulation), partage en texte (WhatsApp, e-mail…), réinitialisation depuis l'écran principal, paniers enregistrés sous un nom personnalisé (stockés sur l'appareil), sauvegardés automatiquement quand ils sont ouverts, et bouton « Ajouter à… » pour ajouter un article directement dans un panier enregistré.
 - **Scan caméra** : lecture d'une étiquette de prix par OCR ([Tesseract.js](https://tesseract.projectnaptha.com), chargé au premier scan ; nécessite une connexion la première fois).
+- **Clavier maison** : AZERTY givré pour les champs texte, accents par appui long, suggestions, correction automatique à l'espace (annulable) et apprentissage ; dictionnaire FR/EN dérivé de [wordfreq](https://github.com/rspeer/wordfreq) (CC BY-SA 4.0, voir `dict/LICENSE.txt`).
+- **Fonds d'écran** : 8 photos de New York générées avec Magnific (Central Park, taxis, Brooklyn Bridge, Empire State, Statue de la Liberté, Radio City, Times Square, promenade de Brooklyn), au choix dans les Réglages, en aléatoire ou avec changement automatique.
 
 ## Mise en ligne (GitHub Pages)
 
