@@ -9,9 +9,9 @@ Appli web installable (PWA) pour Android : elle convertit un prix affiché à Ne
 
 ## Mise en ligne (GitHub Pages)
 
-1. Dans le dépôt GitHub : **Settings → Pages → Source : GitHub Actions**.
-2. Poussez sur `main` : le workflow `.github/workflows/pages.yml` publie le site.
-3. Sur Android, ouvrez l'URL dans Chrome, puis menu **⋮ → Ajouter à l'écran d'accueil / Installer l'application**.
+1. Dans le dépôt GitHub : **Settings → Pages → Source : Deploy from a branch**, branche `main`, dossier `/ (root)`, puis **Save**.
+2. Chaque modification poussée sur `main` est publiée automatiquement en une minute environ.
+3. Sur Android, ouvrez https://piketooth.github.io/Prix-NY/ dans Chrome, puis menu **⋮ → Installer l'application**.
 
 ## Tester en local
 
