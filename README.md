@@ -1,4 +1,4 @@
-# Prix NY
+# Vrai Prix NY
 
 Appli web installable (PWA) pour Android : elle convertit un prix affiché à New York (USD) en euros, avec la sales tax et le pourboire en option.
 
