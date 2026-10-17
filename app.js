@@ -52,7 +52,8 @@ const state = {
   split: 1,
   // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
   // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch' },
+  // adaptive : couleurs selon la photo ; frost : intensité du givré (0 léger → 100 fort)
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 30 },
 };
 
 const store = {
@@ -368,17 +369,17 @@ function haptic(kind = 'light') {
   } catch { /* pas de vibreur */ }
 }
 
-function cartText() {
+function cartText(c = cart) {
   const rate = effRate();
   const toE = (v) => (rate ? ` → ${eur.format(v * rate)}` : '');
-  const lines = [`🗽 ${cart.name ? `Panier « ${cart.name} »` : 'Mon panier'} — Vrai Prix NY`, ''];
-  cart.items.forEach((it, i) => {
+  const lines = [`🗽 ${c.name ? `Panier « ${c.name} »` : 'Mon panier'} — Vrai Prix NY`, ''];
+  c.items.forEach((it, i) => {
     const c = catOf(it.category);
     const qty = it.qty > 1 ? ` ×${it.qty}` : '';
     const split = it.split > 1 ? ` (ma part sur ${it.split})` : '';
     lines.push(`${i + 1}. ${c.emoji} ${it.name || `Article ${i + 1}`}${qty}${split} : ${usd.format(it.share)}${toE(it.share)}`);
   });
-  const t = cartTotals(cart.items);
+  const t = cartTotals(c.items);
   lines.push('', `Total : ${usd.format(t.share)}${toE(t.share)}`);
   if (baseRate()) {
     const r = baseRate().toLocaleString('fr-FR', { maximumFractionDigits: 4 });
@@ -389,10 +390,10 @@ function cartText() {
   return lines.join('\n');
 }
 
-async function shareCart() {
-  if (!cart.items.length) return;
-  const text = cartText();
-  const title = cart.name || 'Mon panier Vrai Prix NY';
+async function shareCart(c = cart) {
+  if (!c.items.length) return;
+  const text = cartText(c);
+  const title = c.name || 'Mon panier Vrai Prix NY';
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
@@ -470,10 +471,30 @@ function saveSaved() {
   renderSaved();
 }
 
+// Panier modifié sans l'ouvrir (entrée de « Mes paniers »), affiché dans #edit-view.
+let editing = null;
+const VIEW_IDS = {
+  cart: { title: 'cart-title', summary: 'cat-summary', list: 'cart-list', empty: 'cart-empty', eur: 'cv-eur', usd: 'cv-usd', detail: 'cv-detail' },
+  edit: { title: 'ev-title', summary: 'ev-summary', list: 'ev-list', empty: 'ev-empty', eur: 'ev-eur', usd: 'ev-usd', detail: 'ev-detail' },
+};
+const viewCart = (kind) => (kind === 'edit' ? editing : cart);
+
+// Sauvegarde du panier affiché ; un panier enregistré modifié reste synchronisé avec le panier en cours.
+function saveView(kind) {
+  if (kind !== 'edit') { saveCart(); return; }
+  editing.savedAt = new Date().toISOString();
+  if (cart.id === editing.id) {
+    cart.items = clone(editing.items);
+    cart.name = editing.name;
+    store.set('cart', cart);
+  }
+  saveSaved();
+  renderCart();
+}
+
 function renderCart() {
   const n = cart.items.length;
   const t = cartTotals(cart.items);
-  const rate = effRate();
 
   $('cart-count').textContent = n;
   $('cart-name').textContent = cart.name || 'Panier';
@@ -481,42 +502,55 @@ function renderCart() {
   showEur($('cart-eur'), t.share);
   $('cart-usd').textContent = usd.format(t.share);
   $('cart-open').classList.toggle('empty-cart', !n);
-
-  $('cart-title').textContent = cart.name || 'Panier';
-  showEur($('cv-eur'), t.share);
-  $('cv-usd').textContent = usd.format(t.share);
-  const detail = [`Prix ${usd.format(t.price)}`];
-  if (t.tax) detail.push(`taxes ${usd.format(t.tax)}`);
-  if (t.tip) detail.push(`pourboires ${usd.format(t.tip)}`);
-  if (state.settings.fee && rate) detail.push(`frais ${eur.format(t.share * baseRate() * state.settings.fee / 100)}`);
-  $('cv-detail').textContent = n ? detail.join(' · ') : '';
-  $('cart-empty').hidden = n > 0;
   $('cart-clear').disabled = !n;
   $('cart-save').disabled = !n;
   $('cart-share').disabled = !n;
 
+  renderCartView('cart');
+  if (editing) renderCartView('edit');
+}
+
+function renderCartView(kind) {
+  const c = viewCart(kind);
+  if (!c) return;
+  const ids = VIEW_IDS[kind];
+  const n = c.items.length;
+  const t = cartTotals(c.items);
+  const rate = effRate();
+
+  $(ids.title).textContent = c.name || 'Panier';
+  showEur($(ids.eur), t.share);
+  $(ids.usd).textContent = usd.format(t.share);
+  const detail = [`Prix ${usd.format(t.price)}`];
+  if (t.tax) detail.push(`taxes ${usd.format(t.tax)}`);
+  if (t.tip) detail.push(`pourboires ${usd.format(t.tip)}`);
+  if (state.settings.fee && rate) detail.push(`frais ${eur.format(t.share * baseRate() * state.settings.fee / 100)}`);
+  $(ids.detail).textContent = n ? detail.join(' · ') : '';
+  $(ids.empty).hidden = n > 0;
+  if (kind === 'edit') $('ev-share').disabled = !n;
+
   // Totaux par catégorie
   const sums = new Map();
-  for (const it of cart.items) sums.set(it.category, (sums.get(it.category) || 0) + it.share);
-  const summary = $('cat-summary');
+  for (const it of c.items) sums.set(it.category, (sums.get(it.category) || 0) + it.share);
+  const summary = $(ids.summary);
   summary.replaceChildren();
   if (sums.size > 1) {
-    for (const c of CATEGORIES) {
-      if (!sums.has(c.id)) continue;
+    for (const cat of CATEGORIES) {
+      if (!sums.has(cat.id)) continue;
       const s = document.createElement('span');
       s.className = 'cat-sum';
-      s.style.setProperty('--cat', c.color);
-      s.textContent = `${c.emoji} ${c.label} ${rate ? eur.format(sums.get(c.id) * rate) : usd.format(sums.get(c.id))}`;
+      s.style.setProperty('--cat', cat.color);
+      s.textContent = `${cat.emoji} ${cat.label} ${rate ? eur.format(sums.get(cat.id) * rate) : usd.format(sums.get(cat.id))}`;
       summary.append(s);
     }
   }
 
-  const list = $('cart-list');
+  const list = $(ids.list);
   list.replaceChildren();
-  cart.items.forEach((it, i) => list.append(cartItemRow(it, i)));
+  c.items.forEach((it, i) => list.append(cartItemRow(it, i, kind)));
 }
 
-function cartItemRow(it, i) {
+function cartItemRow(it, i, kind = 'cart') {
   const c = catOf(it.category);
   const rate = effRate();
   const li = document.createElement('li');
@@ -524,11 +558,15 @@ function cartItemRow(it, i) {
   const card = document.createElement('div');
   card.className = 'item';
 
-  const num = document.createElement('span');
+  // Pastille : touchée, elle permet de changer la catégorie.
+  const num = document.createElement('button');
+  num.type = 'button';
   num.className = 'item-num';
   num.style.setProperty('--cat', c.color);
   num.textContent = i + 1;
-  num.title = c.label;
+  num.title = `${c.label} : changer la catégorie`;
+  num.setAttribute('aria-label', `Article ${i + 1}, ${c.label} : changer la catégorie`);
+  num.addEventListener('click', () => chooseCategory(it, kind));
 
   const main = document.createElement('div');
   main.className = 'item-main';
@@ -543,7 +581,7 @@ function cartItemRow(it, i) {
   name.setAttribute('aria-label', `Nom de l'article ${i + 1}`);
   name.addEventListener('change', () => {
     it.name = name.value.trim();
-    persistCart();
+    if (kind === 'edit') saveView('edit'); else persistCart();
   });
   name.addEventListener('keydown', (e) => { if (e.key === 'Enter') name.blur(); });
   const detail = document.createElement('span');
@@ -572,7 +610,7 @@ function cartItemRow(it, i) {
     plus.setAttribute('aria-label', `Augmenter la quantité de l'article ${i + 1}`);
     const change = (d) => {
       Object.assign(it, compute({ ...it, qty: Math.min(99, Math.max(1, it.qty + d)) }, state.taxes));
-      saveCart();
+      saveView(kind);
       haptic();
     };
     minus.addEventListener('click', () => change(-1));
@@ -581,24 +619,183 @@ function cartItemRow(it, i) {
     main.append(qty);
   }
 
-  const amt = document.createElement('div');
+  // Montant : touché, il permet de modifier le prix.
+  const amt = document.createElement('button');
+  amt.type = 'button';
   amt.className = 'item-amt';
+  amt.setAttribute('aria-label', `Modifier le prix de l'article ${i + 1}`);
   const e = document.createElement('b');
   e.textContent = rate ? eur.format(it.share * rate) : '— €';
   const u = document.createElement('span');
   u.textContent = usd.format(it.share);
   amt.append(e, u);
+  amt.addEventListener('click', () => editPrice(it, kind));
 
   card.append(num, main, amt);
   li.append(card);
   enableSwipe(li, card, () => {
-    const before = clone(cart);
-    cart.items.splice(i, 1);
-    saveCart();
+    const before = clone(viewCart(kind).items);
+    viewCart(kind).items.splice(i, 1);
+    saveView(kind);
     haptic('medium');
-    toast(`${it.name || `Article ${i + 1}`} supprimé`, 'Annuler', () => { cart = before; saveCart(); });
+    toast(`${it.name || `Article ${i + 1}`} supprimé`, 'Annuler', () => {
+      if (!viewCart(kind)) return;
+      viewCart(kind).items = before;
+      saveView(kind);
+    });
   });
   return li;
+}
+
+// --- Modifications d'articles et de paniers --------------------------------------
+
+// Fenêtre de saisie générique ; renvoie la valeur saisie, ou null si annulé.
+function askValue({ title, label, value = '', ok = 'Valider', numeric = false }) {
+  const dlg = $('ask-dialog');
+  const input = $('ask-input');
+  $('ask-title').textContent = title;
+  $('ask-label').textContent = label;
+  $('ask-ok').textContent = ok;
+  input.value = value;
+  input.inputMode = numeric ? 'decimal' : 'none';
+  input.maxLength = numeric ? 10 : 40;
+  if (numeric) input.removeAttribute('data-kbd'); else input.dataset.kbd = '';
+  dlg.returnValue = '';
+  return new Promise((resolve) => {
+    dlg.addEventListener('close', () => {
+      const v = input.value.trim();
+      resolve(dlg.returnValue === 'ok' && v ? v : null);
+    }, { once: true });
+    dlg.showModal();
+    input.select();
+  });
+}
+
+async function editPrice(it, kind) {
+  const v = await askValue({
+    title: 'Modifier le prix',
+    label: it.qty > 1 ? 'Prix affiché en $, par article' : (it.category === 'food' ? 'Montant de l’addition en $ (hors taxe)' : 'Prix affiché en $'),
+    value: it.unit.toFixed(2).replace('.', ','),
+    numeric: true,
+  });
+  const price = v == null ? 0 : parsePrice(v);
+  if (!(price > 0) || price === it.unit) return;
+  const before = clone(it);
+  Object.assign(it, compute({ ...it, unit: price }, state.taxes));
+  saveView(kind);
+  haptic('success');
+  toast(`Prix modifié : ${usd.format(price)}`, 'Annuler', () => { Object.assign(it, before); saveView(kind); });
+}
+
+// Nouvelle catégorie : taxe, pourboire et partage recalculés.
+function recategorize(it, id) {
+  const opts = { ...it.opts };
+  let { unit, qty, split } = it;
+  if (id === 'food' && it.category !== 'food') {
+    opts.tip = true;
+    opts.tipPct = state.taxes.tip.default;
+    opts.tipBasis = 'pre';
+    unit *= qty; // au resto, une seule addition
+    qty = 1;
+  }
+  if (id !== 'food') {
+    opts.tip = false;
+    split = 1;
+  }
+  Object.assign(it, compute({ unit, qty, split, category: id, opts }, state.taxes));
+}
+
+function chooseCategory(it, kind) {
+  const dlg = $('cat-dialog');
+  const box = $('cat-choices');
+  box.replaceChildren();
+  for (const c of CATEGORIES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cat';
+    b.style.setProperty('--cat', c.color);
+    b.setAttribute('aria-checked', String(c.id === it.category));
+    b.textContent = `${c.emoji} ${c.label}`;
+    b.addEventListener('click', () => {
+      dlg.close();
+      if (c.id === it.category) return;
+      const before = clone(it);
+      recategorize(it, c.id);
+      saveView(kind);
+      haptic('success');
+      toast(`${it.name || 'Article'} → ${c.label}`, 'Annuler', () => { Object.assign(it, before); saveView(kind); });
+    });
+    box.append(b);
+  }
+  dlg.showModal();
+}
+
+async function renameCart(kind) {
+  const c = viewCart(kind);
+  const v = await askValue({ title: 'Renommer le panier', label: 'Nom du panier', value: c.name || '' });
+  if (v == null || v === c.name) return;
+  c.name = v;
+  if (kind === 'edit') saveView('edit');
+  else saveCart();
+  haptic('success');
+  toast(`Panier renommé « ${v} »`);
+}
+
+function renameSaved(s) {
+  askValue({ title: 'Renommer le panier', label: 'Nom du panier', value: s.name }).then((v) => {
+    if (v == null || v === s.name) return;
+    s.name = v;
+    if (cart.id === s.id) { cart.name = v; store.set('cart', cart); }
+    saveSaved();
+    renderCart();
+    haptic('success');
+    toast(`Panier renommé « ${v} »`);
+  });
+}
+
+function duplicateSaved(s) {
+  const copy = {
+    id: uid(),
+    name: `${s.name} (copie)`,
+    savedAt: new Date().toISOString(),
+    items: s.items.map((it) => ({ ...clone(it), id: uid() })),
+  };
+  saved.splice(saved.indexOf(s) + 1, 0, copy);
+  saveSaved();
+  haptic('success');
+  toast(`« ${copy.name} » créé`, 'Annuler', () => { saved = saved.filter((x) => x.id !== copy.id); saveSaved(); });
+}
+
+function deleteSaved(s) {
+  const before = clone(saved);
+  saved = saved.filter((x) => x.id !== s.id);
+  if (cart.id === s.id) { cart.id = null; saveCart(); }
+  saveSaved();
+  haptic('medium');
+  toast(`« ${s.name} » supprimé`, 'Annuler', () => { saved = before; saveSaved(); });
+}
+
+function editSaved(s) {
+  editing = s;
+  renderCartView('edit');
+  openView('edit-view');
+}
+
+function savedMenu(s) {
+  const dlg = $('menu-dialog');
+  $('menu-title').textContent = s.name;
+  dlg.returnValue = '';
+  dlg.addEventListener('close', () => {
+    const actions = {
+      open: () => loadSaved(s),
+      edit: () => editSaved(s),
+      rename: () => renameSaved(s),
+      duplicate: () => duplicateSaved(s),
+      delete: () => deleteSaved(s),
+    };
+    actions[dlg.returnValue]?.();
+  }, { once: true });
+  dlg.showModal();
 }
 
 // Glisser un article vers la gauche pour le supprimer.
@@ -805,25 +1002,25 @@ function renderSaved() {
     total.textContent = rate ? eur.format(share * rate) : usd.format(share);
     open.append(title, meta, total);
     open.addEventListener('click', () => loadSaved(s));
-    card.append(open);
+    open.addEventListener('contextmenu', (e) => { e.preventDefault(); haptic('medium'); savedMenu(s); }); // appui long
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'saved-more';
+    more.textContent = '⋯';
+    more.setAttribute('aria-label', `Actions pour le panier ${s.name}`);
+    more.addEventListener('click', () => savedMenu(s));
+    card.append(open, more);
     li.append(card);
-    enableSwipe(li, card, () => {
-      const before = clone(saved);
-      saved = saved.filter((x) => x.id !== s.id);
-      if (cart.id === s.id) { cart.id = null; saveCart(); }
-      saveSaved();
-      haptic('medium');
-      toast(`« ${s.name} » supprimé`, 'Annuler', () => { saved = before; saveSaved(); });
-    });
+    enableSwipe(li, card, () => deleteSaved(s));
     list.append(li);
   }
 }
 
-function loadSaved(s) {
+function loadSaved(s, back = true) {
   const before = clone(cart);
   cart = { id: s.id, name: s.name, items: clone(s.items) };
   saveCart();
-  history.back(); // retour au panier
+  if (back) history.back(); // retour au panier
   toast(`Panier « ${s.name} » ouvert`, before.items.length ? 'Annuler' : null, () => { cart = before; saveCart(); });
 }
 
@@ -873,6 +1070,8 @@ function initSettings() {
     if (s.voiceLang === 'en-US') state.settings.voiceLang = 'en-US';
     if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper)) state.settings.wallpaper = s.wallpaper;
     if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
+    if (s.adaptive === false) state.settings.adaptive = false;
+    if (Number.isFinite(s.frost)) state.settings.frost = Math.min(100, Math.max(0, s.frost));
   }
   $('set-rate').value = state.settings.rate ? String(state.settings.rate).replace('.', ',') : '';
   $('set-rate').addEventListener('input', () => {
@@ -887,6 +1086,20 @@ function initSettings() {
     haptic();
     toast('Cours officiel rétabli');
   });
+  $('opt-adaptive').checked = state.settings.adaptive;
+  $('opt-adaptive').addEventListener('change', () => {
+    state.settings.adaptive = $('opt-adaptive').checked;
+    store.set('settings', state.settings);
+    applyTheme();
+    haptic();
+  });
+  $('set-frost').value = state.settings.frost;
+  $('set-frost').addEventListener('input', () => {
+    state.settings.frost = Number($('set-frost').value);
+    applyFrost();
+  });
+  $('set-frost').addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
+  applyFrost();
   $('opt-sound').checked = state.settings.sound;
   $('opt-sound').addEventListener('change', () => { state.settings.sound = $('opt-sound').checked; applySettings(); haptic(); });
   document.querySelector(`input[name="voice-lang"][value="${state.settings.voiceLang}"]`).checked = true;
@@ -1012,6 +1225,7 @@ window.addEventListener('popstate', () => {
   if (v) {
     $(v.id).hidden = true;
     OVERLAYS[v.id]?.();
+    if (v.id === 'edit-view') editing = null;
   }
   if (!openViews.some((x) => x.lockScroll)) document.body.classList.remove('no-scroll');
   document.body.dataset.view = openViews.at(-1)?.id || '';
@@ -1035,14 +1249,14 @@ function toast(msg, actionLabel, action) {
 // --- Fonds d'écran ------------------------------------------------------------
 
 const WALLPAPERS = [
-  { id: 'central-park', label: 'Central Park' },
-  { id: 'taxis', label: 'Taxis' },
-  { id: 'brooklyn-bridge', label: 'Brooklyn Bridge' },
-  { id: 'empire-state', label: 'Empire State' },
-  { id: 'liberty', label: 'Statue de la Liberté' },
-  { id: 'radio-city', label: 'Radio City' },
-  { id: 'times-square', label: 'Times Square' },
-  { id: 'brooklyn-promenade', label: 'Promenade de Brooklyn' },
+  { id: 'central-park', label: 'Central Park', tone: 'dark' },
+  { id: 'taxis', label: 'Taxis', tone: 'dark' },
+  { id: 'brooklyn-bridge', label: 'Brooklyn Bridge', tone: 'dark' },
+  { id: 'empire-state', label: 'Empire State', tone: 'dark' },
+  { id: 'liberty', label: 'Statue de la Liberté', tone: 'dark' },
+  { id: 'radio-city', label: 'Radio City', tone: 'dark' },
+  { id: 'times-square', label: 'Times Square', tone: 'dark' },
+  { id: 'brooklyn-promenade', label: 'Promenade de Brooklyn', tone: 'dark' },
 ];
 const WP_INTERVALS = [
   { v: 'launch', label: 'À l’ouverture' },
@@ -1057,6 +1271,21 @@ let wpCurrent = null;
 let wpLayer = 'a';
 let wpTimer = null;
 
+// Thème imposé par la photo affichée (option « Couleurs adaptées à la photo »).
+function applyTheme() {
+  const wp = document.body.classList.contains('has-wp') && WALLPAPERS.find((w) => w.id === wpCurrent);
+  const tone = state.settings.adaptive && wp ? wp.tone : null;
+  document.documentElement.classList.toggle('theme-dark', tone === 'dark');
+  document.documentElement.classList.toggle('theme-light', tone === 'light');
+}
+
+// Givré : opacité des cartes (55 % à 85 %) et flou (6 à 28 px).
+function applyFrost() {
+  const f = state.settings.frost / 100;
+  document.documentElement.style.setProperty('--glass-a', (0.55 + 0.3 * f).toFixed(2));
+  document.documentElement.style.setProperty('--blur', `${Math.round(6 + 22 * f)}px`);
+}
+
 function showWallpaper(id) {
   if (id === wpCurrent) return;
   wpCurrent = id;
@@ -1064,6 +1293,7 @@ function showWallpaper(id) {
     $('wp-a').classList.remove('on');
     $('wp-b').classList.remove('on');
     document.body.classList.remove('has-wp');
+    applyTheme();
     return;
   }
   const img = new Image();
@@ -1075,8 +1305,9 @@ function showWallpaper(id) {
     $(`wp-${wpLayer}`).classList.remove('on');
     wpLayer = next;
     document.body.classList.add('has-wp');
+    applyTheme();
   };
-  img.onerror = () => { if (wpCurrent === id) { wpCurrent = null; document.body.classList.remove('has-wp'); } };
+  img.onerror = () => { if (wpCurrent === id) { wpCurrent = null; document.body.classList.remove('has-wp'); applyTheme(); } };
   img.src = wpFile(id);
 }
 
@@ -1444,7 +1675,16 @@ function init() {
   $('settings-open').addEventListener('click', () => openView('settings-view'));
   $('cart-clear').addEventListener('click', clearCart);
   $('cart-save').addEventListener('click', askCartName);
-  $('cart-share').addEventListener('click', shareCart);
+  $('cart-share').addEventListener('click', () => shareCart(cart));
+  $('cart-title').addEventListener('click', () => renameCart('cart'));
+  $('ev-title').addEventListener('click', () => renameCart('edit'));
+  $('ev-share').addEventListener('click', () => editing && shareCart(editing));
+  $('ev-open').addEventListener('click', () => {
+    const s = editing;
+    history.back();
+    // une fois l'écran fermé, on revient au panier si « Mes paniers » est encore ouvert
+    setTimeout(() => s && loadSaved(s, openViews.at(-1)?.id === 'saved-view'), 120);
+  });
   document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => history.back()));
 
   renderAll();
