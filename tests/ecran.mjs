@@ -44,5 +44,11 @@ ok(`sans pourboire: ${await p.textContent('#total-sub')}`, (await p.textContent(
 await p.click('#tip-choices .chip:has-text("18")'); await p.waitForTimeout(200);
 ok(`18 %: ${await p.textContent('#b-tip')}`, (await p.textContent('#b-tip')).startsWith('$18.00'));
 await p.screenshot({ path: `${out}/ecran-${scheme}.png` });
+// Réglages : mise à jour manuelle du cours, titres en gothique
+await p.click('#settings-open'); await p.waitForTimeout(400);
+ok(`titre gothique: ${await p.$eval('#settings-title', (e) => getComputedStyle(e).fontFamily)}`, (await p.$eval('#settings-title', (e) => getComputedStyle(e).fontFamily)).includes('Manufacturing Consent'));
+ok(`date du cours: ${await p.textContent('#rate-checked')}`, (await p.textContent('#rate-checked')).includes('vendredi 16 octobre'));
+await p.click('#rate-refresh'); await p.waitForTimeout(400);
+ok(`mise à jour: ${(await p.textContent('#toast')).trim()}`, (await p.textContent('#toast')).includes('Déjà le dernier cours publié (16/10)'));
 ok(`${scheme} erreurs JS: ${errs}`, errs.length === 0);
 await b.close();

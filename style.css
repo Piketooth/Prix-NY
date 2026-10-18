@@ -755,9 +755,12 @@ body.no-scroll { overflow: hidden; }
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 30px;
-  font-weight: 900;
-  letter-spacing: -.5px;
+  /* Titres de page en gothique, comme le bandeau */
+  font-family: "Manufacturing Consent", "Old English Text MT", serif;
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: .3px;
+  line-height: 1.15;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .empty { text-align: center; color: var(--muted); font-size: 18px; font-weight: 600; margin: 48px 0; }
@@ -1220,7 +1223,10 @@ dialog:has(.kbd:not([hidden])) { margin-top: 4vh; }
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   cursor: pointer;
 }
-.title-btn::after { content: " ✎"; font-size: .55em; opacity: .55; vertical-align: middle; }
+.title-btn::after { content: " ✎"; font-family: system-ui, sans-serif; font-size: .5em; opacity: .55; vertical-align: middle; }
+.rate-update { display: grid; gap: 4px; margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--line); }
+.rate-update .btn { justify-self: start; }
+.rate-update .note { margin: 0; }
 .edit-banner {
   margin: 0 0 10px;
   padding: 6px 12px;

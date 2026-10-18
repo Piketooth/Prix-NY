@@ -314,6 +314,7 @@ function renderEditionDate() {
 function renderRateInfo(offline) {
   const fx = state.fx;
   const el = $('rate-info');
+  renderRateChecked();
   // Court dans le bandeau (« +2 % »), en toutes lettres dans l'infobulle.
   const feeShort = state.settings.fee ? ` · +${pct(state.settings.fee / 100)}` : '';
   const fee = state.settings.fee ? ` · frais bancaires ${pct(state.settings.fee / 100)}` : '';
@@ -390,21 +391,53 @@ async function loadTaxes() {
   render();
 }
 
+// Renvoie 'new' (cours plus récent), 'same' (déjà le dernier publié) ou 'offline'.
 async function loadRate() {
+  const before = state.fx?.date;
   for (const src of RATE_SOURCES) {
     try {
-      const fx = src.parse(await fetchJson(src.url));
+      const fx = { ...src.parse(await fetchJson(src.url)), checkedAt: Date.now() };
       if (!(fx.rate > 0)) throw new Error('taux invalide');
       state.fx = fx;
       store.set('fx', fx);
       renderRateInfo(false);
       renderAll();
-      return;
+      return before && fx.date <= before ? 'same' : 'new';
     } catch { /* on essaie la source suivante */ }
   }
   state.fx = store.get('fx');
   renderRateInfo(true);
   renderAll();
+  return 'offline';
+}
+
+const RATE_REFRESH_MS = 30 * 60 * 1000;
+
+// Bouton « Mettre à jour le cours » des Réglages.
+async function refreshRate() {
+  const btn = $('rate-refresh');
+  btn.disabled = true;
+  btn.textContent = 'Mise à jour…';
+  const result = await loadRate();
+  btn.disabled = false;
+  btn.textContent = '↻ Mettre à jour le cours';
+  const d = state.fx ? new Date(state.fx.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
+  if (result === 'new') { haptic('success'); toast(`Cours mis à jour : celui du ${d}`); }
+  else if (result === 'same') { haptic(); toast(`Déjà le dernier cours publié (${d})`); }
+  else { haptic('warning'); toast(d ? `Pas de connexion : cours du ${d} conservé` : 'Pas de connexion'); }
+}
+
+// Date du cours et heure de la dernière vérification, sous le bouton.
+function renderRateChecked() {
+  const fx = state.fx;
+  const el = $('rate-checked');
+  if (!fx) { el.textContent = 'Aucun cours enregistré.'; return; }
+  const day = new Date(fx.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const checked = fx.checkedAt ? new Date(fx.checkedAt) : null;
+  const when = checked
+    ? ` Vérifié ${checked.toDateString() === new Date().toDateString() ? 'aujourd’hui' : `le ${checked.toLocaleDateString('fr-FR')}`} à ${checked.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.`
+    : '';
+  el.textContent = `Cours du ${day} (${fx.source}).${when} La BCE publie un cours les jours ouvrés vers 16 h (heure de Paris) : le week-end, c’est celui du vendredi.`;
 }
 
 // --- Retours haptiques et partage (natifs dans l'APK) ------------------------
@@ -1931,6 +1964,11 @@ function init() {
   $('scan-btn').addEventListener('click', openScanner);
   $('voice-btn').addEventListener('click', startVoice);
   $('cat-info').addEventListener('click', showCatInfo);
+  $('rate-refresh').addEventListener('click', refreshRate);
+  // L'appli peut rester ouverte en arrière-plan plusieurs jours : nouveau cours au retour.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - (state.fx?.checkedAt || 0) > RATE_REFRESH_MS) loadRate();
+  });
   setDetail(store.get('detailOpen') === true);
   $('detail-btn').addEventListener('click', () => { setDetail($('breakdown').hidden); haptic(); });
   $('add-to-btn').addEventListener('click', addToSaved);
