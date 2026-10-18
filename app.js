@@ -62,7 +62,10 @@ const state = {
   settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2,
     // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
     screens: ['main', 'cart', 'saved', 'apps', 'settings'],
-    apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'revolut', 'yelp', 'todaytix'] },
+    apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
+    customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
+    // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour
+    frostAnim: { on: false, every: 20, from: 30, to: 90, dur: 4 } },
 };
 
 const store = {
@@ -295,7 +298,7 @@ const PAGE_INFO = {
     'Des raccourcis vers les applis pratiques pendant un séjour à New York : se déplacer, réserver, payer, traduire.',
     ['Appli en couleur', 'elle est installée, touchez-la pour l’ouvrir'],
     ['Appli grisée', 'elle n’est pas installée, touchez-la pour l’installer depuis le Play Store'],
-    ['Choix des applis', 'dans les Réglages, « Applis utiles affichées »'],
+    ['Choix des applis', 'dans les Réglages, « Applis utiles affichées » : cochez celles de la liste ou ajoutez les vôtres depuis le téléphone'],
     'Vous pouvez aussi venir ici en faisant glisser le doigt d’un écran à l’autre.',
   ]],
   settings: ['Réglages', [
@@ -306,7 +309,7 @@ const PAGE_INFO = {
     ['Taxe de vente', 'sales tax de New York ajoutée aux prix affichés, avec les exonérations'],
     ['Saisie vocale', 'langue utilisée pour dicter les prix'],
     ['Deuxième horloge', 'ville dont l’heure s’affiche sous le titre'],
-    ['Fond d’écran', 'photos de New York ou les vôtres, couleurs et givré'],
+    ['Fond d’écran', 'photos de New York ou les vôtres, couleurs, givré fixe ou animé'],
   ]],
 };
 
@@ -1464,6 +1467,11 @@ function initSettings() {
     }
     if (Array.isArray(s.screens) && s.screens.length === SCREEN_IDS.length && SCREEN_IDS.every((id) => s.screens.includes(id))) state.settings.screens = s.screens;
     if (Array.isArray(s.apps)) state.settings.apps = s.apps.filter((id) => APPS.some((a) => a.id === id));
+    if (Array.isArray(s.customApps)) state.settings.customApps = s.customApps.filter((a) => a?.pkg && a?.name);
+    if (s.frostAnim) {
+      const f = s.frostAnim, num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
+      state.settings.frostAnim = { on: !!f.on, every: num(f.every, 5, 300, 20), from: num(f.from, 0, 100, 30), to: num(f.to, 0, 100, 90), dur: num(f.dur, 1, 60, 4) };
+    }
     if (s.clock?.tz && s.clock?.label) {
       try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz }; } catch { /* fuseau inconnu */ }
     }
@@ -1597,6 +1605,10 @@ const OVERLAYS = {
     $('price').blur();
   },
   kbd: () => { if (typeof Kbd !== 'undefined') Kbd.hide(); },
+  'main-menu': () => {
+    $('main-menu').hidden = true;
+    $('menu-open').setAttribute('aria-expanded', 'false');
+  },
 };
 
 function openView(id, lockScroll = true) {
@@ -1780,7 +1792,6 @@ const APPS = [
   { id: 'ferry', pkg: 'co.bytemark.nycf', name: 'NYC Ferry', desc: 'Navettes fluviales', emoji: '⛴️', color: '#7fb3ff' },
   { id: 'translate', pkg: 'com.google.android.apps.translate', name: 'Traduction', desc: 'Google Traduction', emoji: '🌐', color: '#8ab4f8' },
   { id: 'wallet', pkg: 'com.google.android.apps.walletnfcrel', name: 'Google Wallet', desc: 'Payer, OMNY', emoji: '💳', color: '#ffb734' },
-  { id: 'revolut', pkg: 'com.revolut.revolut', name: 'Revolut', desc: 'Carte sans frais', emoji: '💶', color: '#b9a7ff' },
   { id: 'wise', pkg: 'com.transferwise.android', name: 'Wise', desc: 'Carte sans frais', emoji: '💸', color: '#b5e48c' },
   { id: 'yelp', pkg: 'com.yelp.android', name: 'Yelp', desc: 'Restos, avis', emoji: '⭐', color: '#ff7a59' },
   { id: 'opentable', pkg: 'com.opentable', name: 'OpenTable', desc: 'Réserver un resto', emoji: '🍽️', color: '#ff9e9e' },
@@ -1789,14 +1800,29 @@ const APPS = [
 const appInstalled = new Map(); // pkg → true / false (APK seulement)
 const playUrl = (pkg) => `https://play.google.com/store/apps/details?id=${pkg}`;
 
-async function checkApps() {
+// Applis affichées : celles de la liste cochées, puis celles ajoutées depuis le téléphone.
+const shownApps = () => [
+  ...APPS.filter((a) => state.settings.apps.includes(a.id)),
+  ...state.settings.customApps.map((c) => ({ id: `c:${c.pkg}`, pkg: c.pkg, name: c.name, desc: 'Mon appli', emoji: '📱', color: '#7a8499', custom: true })),
+];
+const appIcons = new Map(); // pkg → icône officielle (data URL), lue sur le téléphone
+
+async function checkApps(apps) {
   if (!IS_NATIVE) return;
-  await Promise.all(APPS.map(async (a) => {
+  const cap = window.Capacitor;
+  await Promise.all(apps.map(async (a) => {
     try {
-      const r = await window.Capacitor.nativePromise('AppLauncher', 'canOpenUrl', { url: a.pkg });
+      const r = await cap.nativePromise('AppLauncher', 'canOpenUrl', { url: a.pkg });
       appInstalled.set(a.pkg, !!r?.value);
     } catch { appInstalled.delete(a.pkg); }
   }));
+  try {
+    const want = apps.filter((a) => appInstalled.get(a.pkg) && !appIcons.has(a.pkg)).map((a) => a.pkg);
+    if (want.length) {
+      const r = await cap.nativePromise('AppIcons', 'icons', { packages: want });
+      for (const [pkg, icon] of Object.entries(r?.icons || {})) appIcons.set(pkg, icon);
+    }
+  } catch { /* icônes indisponibles : pictogrammes */ }
 }
 
 async function launchApp(a) {
@@ -1821,44 +1847,62 @@ async function launchApp(a) {
   }
 }
 
+// Icône : officielle (lue sur le téléphone) si l'appli est installée ; générique grisée sinon ;
+// pictogramme de couleur dans la version web, qui ne peut pas lire les icônes.
+function appIconEl(a) {
+  const icon = document.createElement('span');
+  icon.className = 'app-icon';
+  const official = appIcons.get(a.pkg);
+  if (official) {
+    icon.classList.add('official');
+    const img = document.createElement('img');
+    img.src = official;
+    img.alt = '';
+    icon.append(img);
+  } else if (appInstalled.get(a.pkg) === false) {
+    icon.classList.add('generic');
+    icon.textContent = a.name.trim().charAt(0).toUpperCase();
+  } else {
+    icon.style.setProperty('--app', a.color);
+    icon.textContent = a.emoji;
+  }
+  return icon;
+}
+
 async function renderApps() {
   const grid = $('apps-grid');
   const draw = () => {
-    const list = APPS.filter((a) => state.settings.apps.includes(a.id));
+    const list = shownApps();
     grid.replaceChildren(...list.map((a) => {
       const missing = appInstalled.get(a.pkg) === false;
       const b = document.createElement('button');
       b.type = 'button';
       b.className = `app-tile${missing ? ' missing' : ''}`;
-      b.setAttribute('aria-label', missing ? `${a.name} : installer depuis le Play Store` : `Ouvrir ${a.name}`);
-      const icon = document.createElement('span');
-      icon.className = 'app-icon';
-      icon.style.setProperty('--app', a.color);
-      icon.textContent = a.emoji;
+      b.setAttribute('aria-label', missing ? `${a.name} : application non installée, l’installer depuis le Play Store` : `Ouvrir ${a.name}`);
       const name = document.createElement('span');
       name.className = 'app-name';
       name.textContent = a.name;
       const desc = document.createElement('span');
       desc.className = missing ? 'app-get' : 'app-desc';
-      desc.textContent = missing ? 'Installer' : a.desc;
-      b.append(icon, name, desc);
+      desc.textContent = missing ? 'Non installée' : a.desc;
+      b.append(appIconEl(a), name, desc);
       b.addEventListener('click', () => launchApp(a));
       return b;
     }));
     $('apps-note').textContent = !list.length
       ? 'Aucune appli choisie : cochez-en dans les Réglages.'
       : IS_NATIVE
-        ? 'Grisée : appli pas installée. Touchez-la pour l’installer depuis le Play Store. Choix des applis dans les Réglages.'
+        ? 'Grisée, application non installée : touchez-la pour l’installer depuis le Play Store. Choix des applis dans les Réglages.'
         : 'Touchez une appli pour l’ouvrir, ou l’installer depuis le Play Store. Choix des applis dans les Réglages.';
   };
   draw();
-  await checkApps();
+  await checkApps(shownApps());
   draw();
 }
 
 function renderAppsChoice() {
   const box = $('apps-choice');
-  box.replaceChildren(...APPS.map((a) => {
+  const chips = APPS.map((a) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'chip';
@@ -1873,7 +1917,69 @@ function renderAppsChoice() {
       haptic();
     });
     return b;
-  }));
+  });
+  // Applis ajoutées depuis le téléphone : toujours affichées, × pour les retirer.
+  for (const c of state.settings.customApps) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip custom-app';
+    b.setAttribute('aria-pressed', 'true');
+    b.setAttribute('aria-label', `Retirer ${c.name}`);
+    const icon = appIcons.get(c.pkg);
+    if (icon) { const img = document.createElement('img'); img.src = icon; img.alt = ''; b.append(img); }
+    b.append(`${c.name} ×`);
+    b.addEventListener('click', () => {
+      state.settings.customApps = state.settings.customApps.filter((x) => x.pkg !== c.pkg);
+      store.set('settings', state.settings);
+      renderAppsChoice();
+      haptic('medium');
+      toast(`${c.name} retirée des applis utiles`);
+    });
+    chips.push(b);
+  }
+  box.replaceChildren(...chips);
+  $('app-add').hidden = !IS_NATIVE;
+}
+
+// « Ajouter une appli » : liste des applis du téléphone, avec leur icône et une recherche.
+let phoneApps = null;
+async function openAppPicker() {
+  const dlg = $('app-pick-dialog');
+  const list = $('app-pick-list');
+  const search = $('app-pick-search');
+  search.value = '';
+  list.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Chargement des applis…' }));
+  dlg.showModal();
+  try {
+    phoneApps ||= (await window.Capacitor.nativePromise('AppIcons', 'installed', {}))?.apps || [];
+  } catch { phoneApps = null; list.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Liste des applis indisponible.' })); return; }
+  for (const a of phoneApps) if (a.icon) appIcons.set(a.pkg, a.icon);
+  const draw = () => {
+    const q = normCity(search.value);
+    const taken = new Set([...APPS.map((a) => a.pkg), ...state.settings.customApps.map((c) => c.pkg)]);
+    const items = phoneApps.filter((a) => !taken.has(a.pkg) && (!q || normCity(a.name).includes(q)));
+    list.replaceChildren(...items.map((a) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'app-pick';
+      const img = document.createElement('img');
+      img.src = a.icon;
+      img.alt = '';
+      b.append(img, a.name);
+      b.addEventListener('click', () => {
+        state.settings.customApps.push({ pkg: a.pkg, name: a.name });
+        store.set('settings', state.settings);
+        renderAppsChoice();
+        haptic('success');
+        toast(`${a.name} ajoutée aux applis utiles`);
+        draw();
+      });
+      return b;
+    }));
+    if (!items.length) list.append(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Aucune appli trouvée.' }));
+  };
+  search.oninput = draw;
+  draw();
 }
 
 let toastTimer = null;
@@ -2149,11 +2255,64 @@ function applyTheme() {
   document.documentElement.classList.toggle('theme-light', tone === 'light');
 }
 
-// Givré : de 0 (cartes transparentes, sans flou) à 100 (opacité 85 %, flou 28 px).
+// Givré : de 0 (cartes transparentes, sans flou) à 100 (opacité 85 %, flou 28 px), en « dur » secondes.
+function setFrostLevel(v, dur = 0) {
+  const root = document.documentElement.style;
+  root.transition = dur ? `--glass-a ${dur}s ease-in-out, --blur ${dur}s ease-in-out` : 'none';
+  root.setProperty('--glass-a', (0.85 * v / 100).toFixed(3));
+  root.setProperty('--blur', `${(28 * v / 100).toFixed(1)}px`);
+}
+
+// Givré animé : toutes les « every » s, de « from » à « to » en « dur » s, puis retour à « from ».
+let frostTimer = null;
+let frostBack = null;
 function applyFrost() {
-  const f = state.settings.frost / 100;
-  document.documentElement.style.setProperty('--glass-a', (0.85 * f).toFixed(2));
-  document.documentElement.style.setProperty('--blur', `${Math.round(28 * f)}px`);
+  clearInterval(frostTimer);
+  clearTimeout(frostBack);
+  const a = state.settings.frostAnim;
+  if (!a.on) { setFrostLevel(state.settings.frost); return; }
+  setFrostLevel(a.from);
+  const cycle = () => {
+    setFrostLevel(a.to, a.dur);
+    frostBack = setTimeout(() => setFrostLevel(a.from, a.dur), a.dur * 1000);
+  };
+  frostBack = setTimeout(cycle, 600); // premier passage tout de suite, pour voir l'effet
+  frostTimer = setInterval(cycle, Math.max(a.every, 2 * a.dur + 1) * 1000);
+}
+
+function renderFrostAnim() {
+  const a = state.settings.frostAnim;
+  $('opt-frost-anim').checked = a.on;
+  $('frost-anim-box').hidden = !a.on;
+  $('frost-fixed').hidden = a.on;
+  for (const k of ['every', 'from', 'to', 'dur']) $(`fa-${k}`).value = a[k];
+  $('fa-every-v').textContent = `${a.every} s`;
+  $('fa-from-v').textContent = a.from;
+  $('fa-to-v').textContent = a.to;
+  $('fa-dur-v').textContent = `${a.dur} s`;
+  const every = Math.max(a.every, 2 * a.dur + 1);
+  $('fa-note').textContent = `Toutes les ${every} s, le givré passe de ${a.from} à ${a.to} en ${a.dur} s, puis revient à ${a.from} en ${a.dur} s.`
+    + (every > a.every ? ' (Délai allongé pour laisser le temps à l’aller-retour.)' : '');
+}
+
+function initFrostAnim() {
+  renderFrostAnim();
+  $('opt-frost-anim').addEventListener('change', () => {
+    state.settings.frostAnim.on = $('opt-frost-anim').checked;
+    store.set('settings', state.settings);
+    renderFrostAnim();
+    applyFrost();
+    haptic();
+  });
+  for (const k of ['every', 'from', 'to', 'dur']) {
+    const el = $(`fa-${k}`);
+    el.addEventListener('input', () => {
+      state.settings.frostAnim[k] = Number(el.value);
+      renderFrostAnim();
+      if (k === 'from' || k === 'to') setFrostLevel(state.settings.frostAnim[k]); // aperçu du niveau réglé
+    });
+    el.addEventListener('change', () => { store.set('settings', state.settings); applyFrost(); haptic(); });
+  }
 }
 
 function showWallpaper(id) {
@@ -2600,8 +2759,22 @@ function init() {
   $('add-btn').addEventListener('click', (e) => addToCart(e.currentTarget));
   $('cart-open').addEventListener('click', () => openView('cart-view'));
   $('saved-open').addEventListener('click', () => openView('saved-view'));
+  // Menu de l'écran principal (à la place de l'ancien bouton Réglages)
+  $('menu-open').addEventListener('click', () => {
+    if (!$('main-menu').hidden) { history.back(); return; }
+    openView('main-menu', false);
+    $('menu-open').setAttribute('aria-expanded', 'true');
+    haptic();
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('main-menu').hidden && openViews.at(-1)?.id === 'main-menu' && !e.target.closest('#main-menu, #menu-open')) history.back();
+  });
+  $('menu-cart').addEventListener('click', () => openView('cart-view'));
+  $('menu-saved').addEventListener('click', () => openView('saved-view'));
   $('settings-open').addEventListener('click', () => openView('settings-view'));
   $('apps-open').addEventListener('click', () => { openView('apps-view'); renderApps(); });
+  $('app-add').addEventListener('click', openAppPicker);
+  initFrostAnim();
   $('apps-info').addEventListener('click', () => showInfo(...PAGE_INFO.apps));
   $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
   // Retour dans l'appli : une appli a peut-être été installée entre-temps.

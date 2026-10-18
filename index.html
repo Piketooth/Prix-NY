@@ -30,9 +30,13 @@
     <div class="mast-top">
       <img class="brand-mark" src="icons/mark-128.png" alt="" width="44" height="44">
       <h1 class="mast-title">Vrai Prix New York</h1>
-      <button id="settings-open" class="round-btn small" type="button" aria-label="Réglages" title="Réglages">
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
-    </button>
+      <button id="menu-open" class="round-btn small" type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div id="main-menu" class="main-menu" role="menu" hidden>
+        <button id="menu-cart" class="menu-row" type="button" role="menuitem"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/></svg><span>Panier</span></button>
+        <button id="menu-saved" class="menu-row" type="button" role="menuitem"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span>Mes paniers</span></button>
+        <button id="apps-open" class="menu-row" type="button" role="menuitem"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg><span>Applis utiles</span></button>
+        <button id="settings-open" class="menu-row" type="button" role="menuitem"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Réglages</span></button>
+      </div>
     </div>
     <div class="mast-rule"></div>
     <p class="mast-edition">
@@ -52,7 +56,6 @@
       <span class="cart-text"><span id="cart-name" class="cart-name">Panier</span><span id="cart-sub" class="cart-sub">vide</span></span>
       <span class="cart-totals"><b id="cart-eur">0,00 €</b><span id="cart-usd">$0.00</span></span>
     </button>
-    <button id="apps-open" class="round-btn apps-btn" type="button" aria-label="Applis utiles" title="Applis utiles"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></button>
   </div>
 
   <main>
@@ -222,6 +225,7 @@
       <div class="card glass setting">
         <span class="label">Applis utiles affichées</span>
         <div id="apps-choice" class="chips apps-choice"></div>
+        <button id="app-add" class="btn secondary small app-add" type="button" hidden>＋ Ajouter une appli du téléphone</button>
       </div>
       <div class="card glass setting">
         <label for="set-rate" class="label">Taux de change</label>
@@ -284,11 +288,25 @@
           <span class="check-text">Couleurs adaptées à la photo</span>
         </label>
         <p class="note">Texte et cartes en clair ou en sombre selon la photo, pour rester lisibles. Sinon, l'appli suit le mode clair ou sombre du téléphone.</p>
-        <label for="set-frost" class="label">Intensité du givré</label>
-        <div class="range-row">
-          <span class="muted">Aucun</span>
-          <input id="set-frost" class="range" type="range" min="0" max="100" step="5">
-          <span class="muted">Fort</span>
+        <div id="frost-fixed">
+          <label for="set-frost" class="label">Intensité du givré</label>
+          <div class="range-row">
+            <span class="muted">Aucun</span>
+            <input id="set-frost" class="range" type="range" min="0" max="100" step="5">
+            <span class="muted">Fort</span>
+          </div>
+        </div>
+        <label class="check">
+          <input id="opt-frost-anim" type="checkbox">
+          <span class="box" aria-hidden="true"></span>
+          <span class="check-text">Givré animé</span>
+        </label>
+        <div id="frost-anim-box" class="frost-anim">
+          <label class="anim-row"><span>Toutes les</span><input id="fa-every" class="range" type="range" min="5" max="120" step="5"><b id="fa-every-v"></b></label>
+          <label class="anim-row"><span>Givré de</span><input id="fa-from" class="range" type="range" min="0" max="100" step="5"><b id="fa-from-v"></b></label>
+          <label class="anim-row"><span>jusqu’à</span><input id="fa-to" class="range" type="range" min="0" max="100" step="5"><b id="fa-to-v"></b></label>
+          <label class="anim-row"><span>en</span><input id="fa-dur" class="range" type="range" min="1" max="30" step="1"><b id="fa-dur-v"></b></label>
+          <p id="fa-note" class="note"></p>
         </div>
         <div id="wp-interval-box">
           <span class="label">Changement automatique (aléatoire)</span>
@@ -406,6 +424,17 @@
     </div>
     <span id="crop-icon-tpl" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></span>
   </section>
+
+  <dialog id="app-pick-dialog" class="dialog app-pick-dialog">
+    <form method="dialog">
+      <h3>Ajouter une appli</h3>
+      <input id="app-pick-search" class="field" type="text" inputmode="none" data-kbd="plain" autocomplete="off" placeholder="Rechercher" aria-label="Rechercher une appli">
+      <div id="app-pick-list" class="app-pick-list"></div>
+      <div class="dialog-actions">
+        <button class="btn" type="submit" value="ok">Terminé</button>
+      </div>
+    </form>
+  </dialog>
 
   <div id="screen-dots" class="screen-dots" aria-hidden="true" hidden></div>
 

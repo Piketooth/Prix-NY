@@ -20,7 +20,7 @@ ok(`titre: ${await p.textContent('.mast-title')}`, (await p.textContent('.mast-t
 ok(`édition: ${await p.textContent('.mast-edition')}`, /1 \$ = 0,9 €/.test(await p.textContent('#rate-info')));
 
 // --- Fond personnalisé
-await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
 let tiles = await tileLabels();
 const base = tiles.length;
 ok(`tuiles: ${base}, Ma photo`, tiles.includes('Ma photo'));
@@ -59,7 +59,7 @@ await p.screenshot({ path: `${out}/v7-main-custom.png` });
 await p.reload(); await p.waitForTimeout(1500);
 const bg = await p.evaluate(() => [...document.querySelectorAll('*')].map(e => getComputedStyle(e).backgroundImage).filter(x => x.includes('blob:')).length);
 ok(`persistance après rechargement: ${bg} fond blob`, bg > 0);
-await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
 await p.click('#wp-gallery .wp-tile .wp-del'); await p.waitForTimeout(500);
 tiles = await tileLabels();
 ok(`suppression: ${tiles.length}`, tiles.length === base + 1);

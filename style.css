@@ -585,7 +585,46 @@ main { padding-bottom: 130px; }
   cursor: pointer;
 }
 .round-btn.small { width: 42px; height: 42px; }
-.apps-btn { width: 44px; height: 44px; align-self: center; }
+/* Menu de l'écran principal */
+.mast-top { position: relative; }
+.main-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 12;
+  min-width: 210px; padding: 6px;
+  display: grid; gap: 2px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow: 0 14px 40px rgba(23, 25, 29, .35);
+  transform-origin: top right;
+  animation: menu-in .18s ease-out;
+}
+.main-menu[hidden] { display: none; }
+@keyframes menu-in { from { opacity: 0; transform: scale(.92); } }
+.menu-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 12px; border: none; border-radius: 12px;
+  background: none; color: var(--text);
+  font: inherit; font-size: 18px; font-weight: 800; text-align: left;
+  cursor: pointer;
+}
+.menu-row:active, .menu-row:hover { background: var(--field); }
+.menu-row svg { color: var(--total); flex: none; }
+.app-add { margin-top: 10px; }
+/* Givré animé : variables animables (transition entre deux niveaux) */
+@property --glass-a { syntax: '<number>'; inherits: true; initial-value: .64; }
+@property --blur { syntax: '<length>'; inherits: true; initial-value: 13px; }
+.frost-anim { display: grid; gap: 6px; margin-top: 6px; }
+.frost-anim[hidden], #frost-fixed[hidden] { display: none; }
+.anim-row { display: grid; grid-template-columns: 82px 1fr 52px; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; }
+.anim-row b { text-align: right; font-variant-numeric: tabular-nums; }
+.chip.custom-app { display: inline-flex; align-items: center; gap: 6px; }
+.chip.custom-app img { width: 20px; height: 20px; border-radius: 5px; }
+.app-pick-dialog form { display: grid; gap: 10px; }
+.app-pick-list { max-height: 50vh; overflow-y: auto; display: grid; gap: 2px; }
+.app-pick { display: flex; align-items: center; gap: 12px; padding: 8px; border: none; border-radius: 12px; background: none; color: var(--text); font: inherit; font-size: 17px; font-weight: 700; text-align: left; cursor: pointer; }
+.app-pick:active { background: var(--field); }
+.app-pick img { width: 36px; height: 36px; border-radius: 9px; flex: none; }
 
 /* Applis utiles */
 .apps-scroll { flex: 1; overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
@@ -609,6 +648,9 @@ main { padding-bottom: 130px; }
 }
 .app-name { font-size: 15px; font-weight: 800; line-height: 1.1; }
 .app-desc { font-size: 12px; font-weight: 600; line-height: 1.15; color: var(--muted); }
+.app-icon.official { background: none; box-shadow: none; }
+.app-icon.official img { width: 52px; height: 52px; border-radius: 14px; display: block; }
+.app-icon.generic { background: #8a919e; color: #fff; font-size: 26px; font-weight: 900; }
 .app-tile.missing .app-icon { filter: grayscale(1); opacity: .45; }
 .app-tile.missing .app-name { opacity: .55; }
 .app-get { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--total); }
@@ -1352,7 +1394,7 @@ body.no-scroll > header, body.no-scroll > .cart-bar-wrap, body.no-scroll > main 
 #import-dialog .menu-item { width: 100%; }
 
 /* Bandeau titre façon une de journal (police gothique Manufacturing Consent, OFL) */
-header.masthead { display: block; padding: 14px 0 8px; }
+header.masthead { display: block; padding: 14px 0 8px; position: relative; z-index: 6; } /* le menu passe au-dessus du contenu */
 .mast-top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 8px; }
 .mast-title {
   margin: 0;
