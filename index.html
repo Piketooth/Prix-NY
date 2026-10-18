@@ -38,7 +38,10 @@
     <p class="mast-edition">
       <span id="mast-date"></span>
       <span id="rate-info">Chargement du taux…</span>
-      <span>New York</span>
+    </p>
+    <p class="mast-clocks" aria-label="Heures">
+      <span id="clock-ny"></span>
+      <span id="clock-home"></span>
     </p>
     <div class="mast-rule double"></div>
   </header>
@@ -236,6 +239,12 @@
           <label><input type="radio" name="voice-lang" value="en-US"><span>English</span></label>
         </div>
         <p class="note">Dites le prix et, si vous voulez, la catégorie : « 34,99 vêtements », « resto 85 ». Hors connexion, le pack de langue doit être installé sur le téléphone.</p>
+      </div>
+      <div class="card glass setting">
+        <label for="set-city" class="label">Deuxième horloge</label>
+        <input id="set-city" class="field" type="text" inputmode="none" data-kbd="plain" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Paris">
+        <div id="city-suggest" class="chips city-suggest"></div>
+        <p id="city-note" class="note"></p>
       </div>
       <div class="card glass setting">
         <span class="label">Fond d'écran</span>

@@ -58,7 +58,8 @@ const state = {
   // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
   // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
   // adaptive : couleurs selon la photo ; frost : intensité du givré (0 léger → 100 fort)
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 30 },
+  // clock : deuxième horloge du bandeau (ville et fuseau horaire)
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 30, clock: { label: 'Paris', tz: 'Europe/Paris' } },
 };
 
 const store = {
@@ -308,6 +309,131 @@ function fitTitle() {
 // Date du jour pour la ligne d'édition du bandeau, façon une de journal.
 function renderEditionDate() {
   $('mast-date').textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// --- Horloges du bandeau : New York et une ville au choix ---------------------
+
+const NY_TZ = 'America/New_York';
+// Noms français et villes sans fuseau propre ; les autres villes sont cherchées dans les fuseaux du navigateur.
+const CITY_ALIASES = [
+  ['Paris', 'Europe/Paris'], ['Lyon', 'Europe/Paris'], ['Marseille', 'Europe/Paris'], ['Toulouse', 'Europe/Paris'],
+  ['Nice', 'Europe/Paris'], ['Nantes', 'Europe/Paris'], ['Bordeaux', 'Europe/Paris'], ['Lille', 'Europe/Paris'],
+  ['Strasbourg', 'Europe/Paris'], ['Montpellier', 'Europe/Paris'], ['Rennes', 'Europe/Paris'], ['Grenoble', 'Europe/Paris'],
+  ['Ajaccio', 'Europe/Paris'], ['Londres', 'Europe/London'], ['Bruxelles', 'Europe/Brussels'], ['Genève', 'Europe/Zurich'],
+  ['Lausanne', 'Europe/Zurich'], ['Zurich', 'Europe/Zurich'], ['Luxembourg', 'Europe/Luxembourg'], ['Monaco', 'Europe/Monaco'],
+  ['Berlin', 'Europe/Berlin'], ['Munich', 'Europe/Berlin'], ['Rome', 'Europe/Rome'], ['Milan', 'Europe/Rome'],
+  ['Madrid', 'Europe/Madrid'], ['Barcelone', 'Europe/Madrid'], ['Lisbonne', 'Europe/Lisbon'], ['Amsterdam', 'Europe/Amsterdam'],
+  ['Vienne', 'Europe/Vienna'], ['Varsovie', 'Europe/Warsaw'], ['Prague', 'Europe/Prague'], ['Athènes', 'Europe/Athens'],
+  ['Moscou', 'Europe/Moscow'], ['Istanbul', 'Europe/Istanbul'], ['Dublin', 'Europe/Dublin'], ['Copenhague', 'Europe/Copenhagen'],
+  ['Montréal', 'America/Toronto'], ['Québec', 'America/Toronto'], ['Toronto', 'America/Toronto'], ['Washington', 'America/New_York'],
+  ['Boston', 'America/New_York'], ['Miami', 'America/New_York'], ['Chicago', 'America/Chicago'], ['Los Angeles', 'America/Los_Angeles'],
+  ['San Francisco', 'America/Los_Angeles'], ['Las Vegas', 'America/Los_Angeles'], ['Mexico', 'America/Mexico_City'],
+  ['Rio de Janeiro', 'America/Sao_Paulo'], ['São Paulo', 'America/Sao_Paulo'], ['Buenos Aires', 'America/Argentina/Buenos_Aires'],
+  ['Alger', 'Africa/Algiers'], ['Casablanca', 'Africa/Casablanca'], ['Tunis', 'Africa/Tunis'], ['Dakar', 'Africa/Dakar'],
+  ['Abidjan', 'Africa/Abidjan'], ['Le Caire', 'Africa/Cairo'], ['Dubaï', 'Asia/Dubai'], ['Pékin', 'Asia/Shanghai'],
+  ['Shanghai', 'Asia/Shanghai'], ['Hong Kong', 'Asia/Hong_Kong'], ['Tokyo', 'Asia/Tokyo'], ['Séoul', 'Asia/Seoul'],
+  ['Singapour', 'Asia/Singapore'], ['Bangkok', 'Asia/Bangkok'], ['New Delhi', 'Asia/Kolkata'], ['Bombay', 'Asia/Kolkata'],
+  ['Sydney', 'Australia/Sydney'], ['Melbourne', 'Australia/Melbourne'], ['La Réunion', 'Indian/Reunion'],
+  ['Saint-Denis (Réunion)', 'Indian/Reunion'], ['Mayotte', 'Indian/Mayotte'], ['Martinique', 'America/Martinique'],
+  ['Fort-de-France', 'America/Martinique'], ['Guadeloupe', 'America/Guadeloupe'], ['Pointe-à-Pitre', 'America/Guadeloupe'],
+  ['Cayenne', 'America/Cayenne'], ['Tahiti', 'Pacific/Tahiti'], ['Papeete', 'Pacific/Tahiti'], ['Nouméa', 'Pacific/Noumea'],
+];
+const normCity = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-_'’]/g, ' ').replace(/\s+/g, ' ').trim();
+let cityIndex = null;
+
+function cities() {
+  if (cityIndex) return cityIndex;
+  const seen = new Set();
+  cityIndex = [];
+  const add = (label, tz) => {
+    const key = normCity(label);
+    if (seen.has(key)) return;
+    seen.add(key);
+    cityIndex.push({ label, tz, key });
+  };
+  for (const [label, tz] of CITY_ALIASES) add(label, tz);
+  let zones = [];
+  try { zones = Intl.supportedValuesOf('timeZone'); } catch { /* navigateur ancien : alias seuls */ }
+  for (const tz of zones) {
+    const city = tz.split('/').pop();
+    if (/^(GMT|UTC|Etc)/.test(city)) continue;
+    add(city.replace(/_/g, ' '), tz);
+  }
+  return cityIndex;
+}
+
+function findCities(text, max = 5) {
+  const q = normCity(text);
+  if (q.length < 2) return [];
+  const all = cities();
+  const starts = all.filter((c) => c.key.startsWith(q));
+  const inside = all.filter((c) => !c.key.startsWith(q) && c.key.includes(q));
+  return [...starts, ...inside].slice(0, max);
+}
+
+// Décalage en minutes d'un fuseau par rapport à UTC, à l'instant d.
+function tzOffset(tz, d) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(d).map((x) => [x.type, x.value]));
+  return Math.round((Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - Math.floor(d / 60000) * 60000) / 60000);
+}
+
+function renderClocks() {
+  const now = new Date();
+  const time = (tz) => now.toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+  const { label, tz } = state.settings.clock;
+  $('clock-ny').textContent = `🗽 New York ${time(NY_TZ)}`;
+  if (tz === NY_TZ) { $('clock-home').textContent = ''; return; }
+  const diff = (tzOffset(tz, now) - tzOffset(NY_TZ, now)) / 60;
+  const sign = diff >= 0 ? '+' : '−';
+  const h = Math.abs(diff).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  $('clock-home').textContent = `${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}`;
+}
+
+function startClocks() {
+  renderClocks();
+  // Recalée sur le début de chaque minute.
+  setTimeout(() => { renderClocks(); setInterval(renderClocks, 60000); }, 60000 - (Date.now() % 60000) + 50);
+}
+
+function setClockCity(c) {
+  state.settings.clock = { label: c.label, tz: c.tz };
+  store.set('settings', state.settings);
+  $('set-city').value = c.label;
+  $('city-suggest').replaceChildren();
+  $('city-note').textContent = `Heure de ${c.label} affichée sous le titre, à côté de celle de New York.`;
+  renderClocks();
+}
+
+function initClockSetting() {
+  const input = $('set-city');
+  const box = $('city-suggest');
+  input.value = state.settings.clock.label;
+  $('city-note').textContent = 'Tapez une ville (Paris, Montréal, Genève, Tokyo…) : son heure s’affiche sous le titre, à côté de celle de New York.';
+  // Champ vidé au toucher (ville actuelle en indication) pour taper directement la nouvelle.
+  input.addEventListener('focus', () => { input.placeholder = state.settings.clock.label; input.value = ''; });
+  input.addEventListener('input', () => {
+    box.replaceChildren();
+    for (const c of findCities(input.value)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.textContent = c.label;
+      b.addEventListener('click', () => { setClockCity(c); haptic(); });
+      box.append(b);
+    }
+  });
+  // Validation en quittant le champ (après un éventuel toucher sur une suggestion).
+  input.addEventListener('blur', () => setTimeout(() => {
+    if (input.value === state.settings.clock.label) { box.replaceChildren(); return; }
+    const q = normCity(input.value);
+    if (!q) { input.value = state.settings.clock.label; return; } // rien tapé : on garde la ville
+    const exact = cities().find((c) => c.key === q) || findCities(input.value, 1)[0];
+    if (exact) setClockCity(exact);
+    else $('city-note').textContent = `« ${input.value} » introuvable : essayez une grande ville du même fuseau horaire.`;
+  }, 250));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
 }
 
 // Taux affiché dans la ligne d'édition du bandeau (court) ; le détail complet en infobulle.
@@ -1243,6 +1369,9 @@ function initSettings() {
     if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
     if (s.adaptive === false) state.settings.adaptive = false;
     if (Number.isFinite(s.frost)) state.settings.frost = Math.min(100, Math.max(0, s.frost));
+    if (s.clock?.tz && s.clock?.label) {
+      try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz }; } catch { /* fuseau inconnu */ }
+    }
   }
   $('set-rate').value = state.settings.rate ? String(state.settings.rate).replace('.', ',') : '';
   $('set-rate').addEventListener('input', () => {
@@ -1943,6 +2072,8 @@ function init() {
   state.fx = store.get('fx');
   state.taxes = store.get('taxes') || DEFAULT_TAXES;
   initSettings();
+  initClockSetting();
+  startClocks();
   loadCustomWallpapers().finally(applyWallpaper);
   $('wp-file').addEventListener('change', () => {
     const f = $('wp-file').files[0];

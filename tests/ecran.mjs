@@ -3,7 +3,7 @@ import { chromium } from 'playwright';
 const out = process.argv[2];
 const scheme = process.argv[3] || 'light';
 const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
-const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme, timezoneId: 'Europe/Paris' });
 await ctx.addInitScript(() => { sessionStorage.setItem('splash', '1'); if (!localStorage.getItem('s8')) { localStorage.setItem('s8', '1'); localStorage.setItem('settings', JSON.stringify({ wallpaper: 'none', fee: 2 })); } });
 const p = await ctx.newPage();
 const errs = []; p.on('pageerror', e => errs.push(e.message));
@@ -50,5 +50,16 @@ ok(`titre gothique: ${await p.$eval('#settings-title', (e) => getComputedStyle(e
 ok(`date du cours: ${await p.textContent('#rate-checked')}`, (await p.textContent('#rate-checked')).includes('vendredi 16 octobre'));
 await p.click('#rate-refresh'); await p.waitForTimeout(400);
 ok(`mise à jour: ${(await p.textContent('#toast')).trim()}`, (await p.textContent('#toast')).includes('Déjà le dernier cours publié (16/10)'));
+// Deuxième horloge : Paris par défaut, puis Montréal saisie au clavier maison (sans correction)
+ok(`horloges: ${await p.textContent('.mast-clocks')}`, (await p.textContent('#clock-ny')).includes('New York') && /^Paris \d\d:\d\d · \+[56] h$/.test(await p.textContent('#clock-home')));
+ok('plus de « New York » seul dans la ligne d\'édition', !(await p.textContent('.mast-edition')).includes('New York'));
+await p.click('#set-city'); await p.waitForTimeout(200);
+const key = async (k) => { await p.locator(`#kbd [data-key="${k}"]`).first().dispatchEvent('pointerdown'); await p.locator(`#kbd [data-key="${k}"]`).first().dispatchEvent('pointerup'); };
+for (const k of 'mon') await key(k);
+ok('pas de suggestions du dictionnaire', (await p.$$('.kbd-sug')).length === 0);
+await p.click('#city-suggest .chip:has-text("Montréal")'); await p.waitForTimeout(400);
+ok(`Montréal: ${await p.textContent('#clock-home')}`, (await p.textContent('#clock-home')).endsWith('même heure'));
+await p.reload(); await p.waitForTimeout(800);
+ok('ville mémorisée', (await p.textContent('#clock-home')).startsWith('Montréal'));
 ok(`${scheme} erreurs JS: ${errs}`, errs.length === 0);
 await b.close();

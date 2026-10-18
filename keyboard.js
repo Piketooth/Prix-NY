@@ -58,6 +58,8 @@ const Kbd = (() => {
   }
 
   const known = (w) => dict?.has(w) || learned.has(w);
+  // data-kbd="plain" (noms de ville…) : ni suggestions, ni correction, ni apprentissage.
+  const plain = () => target?.dataset.kbd === 'plain';
   const rank = (w) => (learned.has(w) ? -1 : dict?.get(w) ?? Infinity);
 
   // Meilleure correction pour un mot inconnu (accents manquants ou une faute de frappe).
@@ -166,7 +168,7 @@ const Kbd = (() => {
       }
       case 'space': {
         const { word, start, pos } = currentWord();
-        const fix = word && correction(word);
+        const fix = word && !plain() && correction(word);
         if (fix) {
           const fixed = matchCase(word, fix);
           replaceWord(start, pos, `${fixed} `);
@@ -206,7 +208,7 @@ const Kbd = (() => {
 
   // À la fermeture, les mots inconnus gardés tels quels sont appris.
   function learnFromField() {
-    if (!target || !dict) return;
+    if (!target || !dict || plain()) return;
     for (const w of target.value.toLowerCase().match(/[\p{L}'’-]{3,}/gu) || []) {
       if (!known(w)) learned.add(w);
     }
@@ -225,7 +227,7 @@ const Kbd = (() => {
     if (!el) return;
     const { word } = target ? currentWord() : { word: '' };
     sugBar.replaceChildren();
-    for (const s of suggestions(word)) {
+    for (const s of plain() ? [] : suggestions(word)) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'kbd-sug';
