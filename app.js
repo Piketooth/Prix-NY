@@ -57,9 +57,9 @@ const state = {
   split: 1,
   // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
   // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
-  // adaptive : couleurs selon la photo ; frost : intensité du givré (0 léger → 100 fort)
+  // adaptive : couleurs selon la photo ; frost : intensité du givré (0 aucun → 100 fort)
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 30, clock: { label: 'Paris', tz: 'Europe/Paris' } },
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2 },
 };
 
 const store = {
@@ -1417,7 +1417,11 @@ function initSettings() {
     if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper) || /^custom-/.test(s.wallpaper || '')) state.settings.wallpaper = s.wallpaper;
     if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
     if (s.adaptive === false) state.settings.adaptive = false;
-    if (Number.isFinite(s.frost)) state.settings.frost = Math.min(100, Math.max(0, s.frost));
+    if (Number.isFinite(s.frost)) {
+      // Ancienne échelle (0 = déjà 55 % d'opacité) : même rendu sur la nouvelle, qui part de 0.
+      const f = s.frostScale === 2 ? s.frost : Math.round((55 + 0.3 * s.frost) / 0.85);
+      state.settings.frost = Math.min(100, Math.max(0, f));
+    }
     if (s.clock?.tz && s.clock?.label) {
       try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz }; } catch { /* fuseau inconnu */ }
     }
@@ -1726,11 +1730,11 @@ function applyTheme() {
   document.documentElement.classList.toggle('theme-light', tone === 'light');
 }
 
-// Givré : opacité des cartes (55 % à 85 %) et flou (6 à 28 px).
+// Givré : de 0 (cartes transparentes, sans flou) à 100 (opacité 85 %, flou 28 px).
 function applyFrost() {
   const f = state.settings.frost / 100;
-  document.documentElement.style.setProperty('--glass-a', (0.55 + 0.3 * f).toFixed(2));
-  document.documentElement.style.setProperty('--blur', `${Math.round(6 + 22 * f)}px`);
+  document.documentElement.style.setProperty('--glass-a', (0.85 * f).toFixed(2));
+  document.documentElement.style.setProperty('--blur', `${Math.round(28 * f)}px`);
 }
 
 function showWallpaper(id) {
