@@ -59,7 +59,10 @@ const state = {
   // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
   // adaptive : couleurs selon la photo ; frost : intensité du givré (0 aucun → 100 fort)
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2 },
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2,
+    // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
+    screens: ['main', 'cart', 'saved', 'apps', 'settings'],
+    apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'revolut', 'yelp', 'todaytix'] },
 };
 
 const store = {
@@ -265,19 +268,47 @@ function renderCatInfo(it) {
   if (info) $('cat-info-text').textContent = info.short(it, state.taxes);
 }
 
-function showCatInfo() {
-  const info = CAT_INFO[state.category];
-  if (!info) return;
-  $('info-title').textContent = info.title;
-  const body = $('info-body');
-  body.replaceChildren();
-  for (const line of info.body(state.taxes)) {
+// Fenêtre d'explication : un titre et des paragraphes ; [« Titre », « texte »] met le début en gras.
+function showInfo(title, lines) {
+  $('info-title').textContent = title;
+  $('info-body').replaceChildren(...lines.map((line) => {
     const p = document.createElement('p');
-    p.textContent = line;
-    body.append(p);
-  }
+    if (Array.isArray(line)) {
+      const b = document.createElement('b');
+      b.textContent = `${line[0]} : `;
+      p.append(b, line[1]);
+    } else {
+      p.textContent = line;
+    }
+    return p;
+  }));
   $('info-dialog').showModal();
 }
+
+function showCatInfo() {
+  const info = CAT_INFO[state.category];
+  if (info) showInfo(info.title, info.body(state.taxes));
+}
+
+const PAGE_INFO = {
+  apps: ['Applis utiles', [
+    'Des raccourcis vers les applis pratiques pendant un séjour à New York : se déplacer, réserver, payer, traduire.',
+    ['Appli en couleur', 'elle est installée, touchez-la pour l’ouvrir'],
+    ['Appli grisée', 'elle n’est pas installée, touchez-la pour l’installer depuis le Play Store'],
+    ['Choix des applis', 'dans les Réglages, « Applis utiles affichées »'],
+    'Vous pouvez aussi venir ici en faisant glisser le doigt d’un écran à l’autre.',
+  ]],
+  settings: ['Réglages', [
+    'Tout ce qui personnalise l’appli. Les réglages sont gardés sur le téléphone.',
+    ['Écrans', 'ordre dans lequel on passe d’un écran à l’autre en faisant glisser le doigt'],
+    ['Applis utiles', 'applis proposées dans la page de raccourcis'],
+    ['Taux de change', 'cours officiel de la BCE mis à jour, ou votre propre taux ; frais bancaires de votre carte'],
+    ['Taxe de vente', 'sales tax de New York ajoutée aux prix affichés, avec les exonérations'],
+    ['Saisie vocale', 'langue utilisée pour dicter les prix'],
+    ['Deuxième horloge', 'ville dont l’heure s’affiche sous le titre'],
+    ['Fond d’écran', 'photos de New York ou les vôtres, couleurs et givré'],
+  ]],
+};
 
 function setCategory(id) {
   const was = state.category;
@@ -1431,6 +1462,8 @@ function initSettings() {
       const f = s.frostScale === 2 ? s.frost : Math.round((55 + 0.3 * s.frost) / 0.85);
       state.settings.frost = Math.min(100, Math.max(0, f));
     }
+    if (Array.isArray(s.screens) && s.screens.length === SCREEN_IDS.length && SCREEN_IDS.every((id) => s.screens.includes(id))) state.settings.screens = s.screens;
+    if (Array.isArray(s.apps)) state.settings.apps = s.apps.filter((id) => APPS.some((a) => a.id === id));
     if (s.clock?.tz && s.clock?.label) {
       try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz }; } catch { /* fuseau inconnu */ }
     }
@@ -1583,6 +1616,7 @@ function openView(id, lockScroll = true) {
 }
 
 window.addEventListener('popstate', () => {
+  if (skipPop) { skipPop--; return; }
   const v = openViews.pop();
   if (v) {
     $(v.id).hidden = true;
@@ -1592,7 +1626,255 @@ window.addEventListener('popstate', () => {
   }
   if (!openViews.some((x) => x.lockScroll)) document.body.classList.remove('no-scroll');
   document.body.dataset.view = openViews.at(-1)?.id || '';
+  // Retour à l'accueil après un balayage : on saute les entrées d'historique devenues inutiles.
+  if (!openViews.length && ghostEntries) {
+    skipPop = 1;
+    const k = ghostEntries;
+    ghostEntries = 0;
+    history.go(-k);
+  }
 });
+
+// --- Écrans : balayage gauche / droite, dans l'ordre choisi dans les Réglages -------
+
+const SCREENS = {
+  main: { label: 'Accueil', view: null },
+  cart: { label: 'Panier', view: 'cart-view' },
+  saved: { label: 'Mes paniers', view: 'saved-view' },
+  apps: { label: 'Applis utiles', view: 'apps-view' },
+  settings: { label: 'Réglages', view: 'settings-view' },
+};
+const SCREEN_IDS = Object.keys(SCREENS);
+let ghostEntries = 0; // entrées d'historique laissées par des écrans fermés en balayant
+let skipPop = 0;
+
+const screenOfView = (view) => SCREEN_IDS.find((id) => SCREENS[id].view === view);
+
+// Écran affiché, ou null si une fenêtre, le pavé, le clavier ou un écran hors balayage est ouvert.
+function currentScreen() {
+  if (document.querySelector('dialog[open]')) return null;
+  if (openViews.some((v) => !screenOfView(v.id))) return null;
+  return openViews.length ? screenOfView(openViews.at(-1).id) : 'main';
+}
+
+function showDots(screen) {
+  const box = $('screen-dots');
+  box.replaceChildren(...state.settings.screens.map((id) => {
+    const i = document.createElement('i');
+    if (id === screen) i.className = 'on';
+    return i;
+  }));
+  box.hidden = false;
+  clearTimeout(showDots.t);
+  showDots.t = setTimeout(() => { box.hidden = true; }, 1200);
+}
+
+function animateIn(els, dir) {
+  for (const el of els) {
+    el.classList.remove('swipe-next', 'swipe-prev');
+    void el.offsetWidth;
+    el.classList.add(`swipe-${dir}`);
+    el.addEventListener('animationend', () => el.classList.remove(`swipe-${dir}`), { once: true });
+  }
+}
+
+function goScreen(screen, dir) {
+  const cur = currentScreen();
+  if (!cur || screen === cur) return false;
+  // Un seul écran reste ouvert (ex. Mes paniers ouvert depuis le Panier).
+  while (openViews.length > 1) {
+    $(openViews.pop().id).hidden = true;
+    ghostEntries++;
+  }
+  const top = openViews[0]?.id;
+  const view = SCREENS[screen].view;
+  if (!view) {
+    history.back();
+    animateIn([document.querySelector('main'), document.querySelector('header')], dir);
+  } else if (!top) {
+    openView(view);
+  } else {
+    $(top).hidden = true;
+    $(view).hidden = false;
+    openViews[0] = { id: view, lockScroll: true };
+    history.replaceState({ view }, '');
+    document.body.dataset.view = view;
+  }
+  if (view) {
+    $(view).scrollTop = 0;
+    animateIn([$(view)], dir);
+    if (screen === 'apps') renderApps();
+  }
+  showDots(screen);
+  haptic();
+  return true;
+}
+
+function swipe(delta) {
+  const cur = currentScreen();
+  if (!cur) return;
+  const order = state.settings.screens;
+  const next = order[order.indexOf(cur) + delta];
+  if (next) goScreen(next, delta > 0 ? 'next' : 'prev');
+}
+
+function initSwipe() {
+  let start = null;
+  // Zones qui ont leur propre geste horizontal : articles (glisser pour supprimer), curseurs, recadrage…
+  const NO_SWIPE = '.item-wrap, input[type="range"], .crop-view, dialog, #keypad, #kbd, textarea, .wp-gallery';
+  document.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    start = e.touches.length === 1 && !e.target.closest(NO_SWIPE) ? { x: t.clientX, y: t.clientY, at: Date.now() } : null;
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) start = null; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x, dy = t.clientY - start.y;
+    const quick = Date.now() - start.at < 1000;
+    start = null;
+    if (quick && Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) swipe(dx < 0 ? 1 : -1);
+  });
+}
+
+function renderScreenOrder() {
+  const list = $('screen-order');
+  const order = state.settings.screens;
+  list.replaceChildren(...order.map((id, i) => {
+    const li = document.createElement('li');
+    const n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = i + 1;
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = SCREENS[id].label;
+    const move = (d, label, text) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = text;
+      b.disabled = !order[i + d];
+      b.setAttribute('aria-label', `${label} : ${SCREENS[id].label}`);
+      b.addEventListener('click', () => {
+        [order[i], order[i + d]] = [order[i + d], order[i]];
+        store.set('settings', state.settings);
+        renderScreenOrder();
+        haptic();
+      });
+      return b;
+    };
+    li.append(n, name, move(-1, 'Monter', '▲'), move(1, 'Descendre', '▼'));
+    return li;
+  }));
+}
+
+// --- Applis utiles : ouvrir l'appli si elle est installée, sinon sa page du Play Store -------
+
+const APPS = [
+  { id: 'maps', pkg: 'com.google.android.apps.maps', name: 'Google Maps', desc: 'Plans, itinéraires', emoji: '🗺️', color: '#7fc8a9' },
+  { id: 'citymapper', pkg: 'com.citymapper.app.release', name: 'Citymapper', desc: 'Métro, bus, à pied', emoji: '🧭', color: '#9be15d' },
+  { id: 'mta', pkg: 'info.mta.mymta', name: 'MTA', desc: 'Métro et bus en direct', emoji: '🚇', color: '#5b9cf0' },
+  { id: 'uber', pkg: 'com.ubercab', name: 'Uber', desc: 'VTC', emoji: '🚗', color: '#c9ced6' },
+  { id: 'lyft', pkg: 'me.lyft.android', name: 'Lyft', desc: 'VTC', emoji: '🚙', color: '#ff8fc8' },
+  { id: 'curb', pkg: 'com.ridecharge.android.taximagic', name: 'Curb', desc: 'Taxis jaunes', emoji: '🚕', color: '#ffd23f' },
+  { id: 'citibike', pkg: 'com.citibikenyc.citibike', name: 'Citi Bike', desc: 'Vélos en libre-service', emoji: '🚲', color: '#6ec6ff' },
+  { id: 'ferry', pkg: 'co.bytemark.nycf', name: 'NYC Ferry', desc: 'Navettes fluviales', emoji: '⛴️', color: '#7fb3ff' },
+  { id: 'translate', pkg: 'com.google.android.apps.translate', name: 'Traduction', desc: 'Google Traduction', emoji: '🌐', color: '#8ab4f8' },
+  { id: 'wallet', pkg: 'com.google.android.apps.walletnfcrel', name: 'Google Wallet', desc: 'Payer, OMNY', emoji: '💳', color: '#ffb734' },
+  { id: 'revolut', pkg: 'com.revolut.revolut', name: 'Revolut', desc: 'Carte sans frais', emoji: '💶', color: '#b9a7ff' },
+  { id: 'wise', pkg: 'com.transferwise.android', name: 'Wise', desc: 'Carte sans frais', emoji: '💸', color: '#b5e48c' },
+  { id: 'yelp', pkg: 'com.yelp.android', name: 'Yelp', desc: 'Restos, avis', emoji: '⭐', color: '#ff7a59' },
+  { id: 'opentable', pkg: 'com.opentable', name: 'OpenTable', desc: 'Réserver un resto', emoji: '🍽️', color: '#ff9e9e' },
+  { id: 'todaytix', pkg: 'com.todaytix.TodayTix', name: 'TodayTix', desc: 'Billets de spectacles', emoji: '🎭', color: '#f6a6ff' },
+];
+const appInstalled = new Map(); // pkg → true / false (APK seulement)
+const playUrl = (pkg) => `https://play.google.com/store/apps/details?id=${pkg}`;
+
+async function checkApps() {
+  if (!IS_NATIVE) return;
+  await Promise.all(APPS.map(async (a) => {
+    try {
+      const r = await window.Capacitor.nativePromise('AppLauncher', 'canOpenUrl', { url: a.pkg });
+      appInstalled.set(a.pkg, !!r?.value);
+    } catch { appInstalled.delete(a.pkg); }
+  }));
+}
+
+async function launchApp(a) {
+  haptic();
+  if (IS_NATIVE) {
+    const cap = window.Capacitor;
+    try {
+      if (appInstalled.get(a.pkg) !== false) {
+        const r = await cap.nativePromise('AppLauncher', 'openUrl', { url: a.pkg });
+        if (r?.completed) return;
+      }
+      const r = await cap.nativePromise('AppLauncher', 'openUrl', { url: `market://details?id=${a.pkg}` });
+      if (!r?.completed) await cap.nativePromise('AppLauncher', 'openUrl', { url: playUrl(a.pkg) });
+    } catch { toast('Impossible d’ouvrir cette appli'); }
+    return;
+  }
+  // Navigateur Android : l'appli si elle est installée, sinon le Play Store ; ailleurs, la page du Play Store.
+  if (/Android/i.test(navigator.userAgent)) {
+    location.href = `intent://#Intent;package=${a.pkg};S.browser_fallback_url=${encodeURIComponent(playUrl(a.pkg))};end`;
+  } else {
+    window.open(playUrl(a.pkg), '_blank', 'noopener');
+  }
+}
+
+async function renderApps() {
+  const grid = $('apps-grid');
+  const draw = () => {
+    const list = APPS.filter((a) => state.settings.apps.includes(a.id));
+    grid.replaceChildren(...list.map((a) => {
+      const missing = appInstalled.get(a.pkg) === false;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `app-tile${missing ? ' missing' : ''}`;
+      b.setAttribute('aria-label', missing ? `${a.name} : installer depuis le Play Store` : `Ouvrir ${a.name}`);
+      const icon = document.createElement('span');
+      icon.className = 'app-icon';
+      icon.style.setProperty('--app', a.color);
+      icon.textContent = a.emoji;
+      const name = document.createElement('span');
+      name.className = 'app-name';
+      name.textContent = a.name;
+      const desc = document.createElement('span');
+      desc.className = missing ? 'app-get' : 'app-desc';
+      desc.textContent = missing ? 'Installer' : a.desc;
+      b.append(icon, name, desc);
+      b.addEventListener('click', () => launchApp(a));
+      return b;
+    }));
+    $('apps-note').textContent = !list.length
+      ? 'Aucune appli choisie : cochez-en dans les Réglages.'
+      : IS_NATIVE
+        ? 'Grisée : appli pas installée. Touchez-la pour l’installer depuis le Play Store. Choix des applis dans les Réglages.'
+        : 'Touchez une appli pour l’ouvrir, ou l’installer depuis le Play Store. Choix des applis dans les Réglages.';
+  };
+  draw();
+  await checkApps();
+  draw();
+}
+
+function renderAppsChoice() {
+  const box = $('apps-choice');
+  box.replaceChildren(...APPS.map((a) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.setAttribute('aria-pressed', String(state.settings.apps.includes(a.id)));
+    b.textContent = `${a.emoji} ${a.name}`;
+    b.addEventListener('click', () => {
+      const on = state.settings.apps.includes(a.id);
+      // On garde l'ordre de la liste proposée.
+      state.settings.apps = APPS.map((x) => x.id).filter((id) => (id === a.id ? !on : state.settings.apps.includes(id)));
+      store.set('settings', state.settings);
+      renderAppsChoice();
+      haptic();
+    });
+    return b;
+  }));
+}
 
 let toastTimer = null;
 function toast(msg, actionLabel, action) {
@@ -2319,6 +2601,14 @@ function init() {
   $('cart-open').addEventListener('click', () => openView('cart-view'));
   $('saved-open').addEventListener('click', () => openView('saved-view'));
   $('settings-open').addEventListener('click', () => openView('settings-view'));
+  $('apps-open').addEventListener('click', () => { openView('apps-view'); renderApps(); });
+  $('apps-info').addEventListener('click', () => showInfo(...PAGE_INFO.apps));
+  $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
+  // Retour dans l'appli : une appli a peut-être été installée entre-temps.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('apps-view').hidden) renderApps(); });
+  initSwipe();
+  renderScreenOrder();
+  renderAppsChoice();
   $('cart-clear').addEventListener('click', clearCart);
   $('cart-save').addEventListener('click', askCartName);
   $('cart-share').addEventListener('click', () => shareCart(cart));

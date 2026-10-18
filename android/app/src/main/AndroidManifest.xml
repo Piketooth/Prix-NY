@@ -45,4 +45,27 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
+
+    <!-- Page « Applis utiles » : savoir si chaque appli est installée (Android 11+), ouvrir le Play Store -->
+    <queries>
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="com.citymapper.app.release" />
+        <package android:name="info.mta.mymta" />
+        <package android:name="com.ubercab" />
+        <package android:name="me.lyft.android" />
+        <package android:name="com.ridecharge.android.taximagic" />
+        <package android:name="com.citibikenyc.citibike" />
+        <package android:name="co.bytemark.nycf" />
+        <package android:name="com.google.android.apps.translate" />
+        <package android:name="com.google.android.apps.walletnfcrel" />
+        <package android:name="com.revolut.revolut" />
+        <package android:name="com.transferwise.android" />
+        <package android:name="com.yelp.android" />
+        <package android:name="com.opentable" />
+        <package android:name="com.todaytix.TodayTix" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="market" />
+        </intent>
+    </queries>
 </manifest>

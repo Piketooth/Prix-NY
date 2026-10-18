@@ -52,6 +52,7 @@
       <span class="cart-text"><span id="cart-name" class="cart-name">Panier</span><span id="cart-sub" class="cart-sub">vide</span></span>
       <span class="cart-totals"><b id="cart-eur">0,00 €</b><span id="cart-usd">$0.00</span></span>
     </button>
+    <button id="apps-open" class="round-btn apps-btn" type="button" aria-label="Applis utiles" title="Applis utiles"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg></button>
   </div>
 
   <main>
@@ -194,12 +195,34 @@
     <p class="note saved-note">Sauvegardez vos paniers avant de changer de téléphone ou de désinstaller l'appli.</p>
   </section>
 
+  <section id="apps-view" class="sheet" hidden aria-labelledby="apps-title">
+    <div class="sheet-head">
+      <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 id="apps-title">Applis utiles</h2>
+      <button id="apps-info" class="round-btn page-info" type="button" aria-label="À quoi sert cette page ?"><span class="info-i" aria-hidden="true">i</span></button>
+    </div>
+    <div class="apps-scroll">
+      <div id="apps-grid" class="apps-grid"></div>
+      <p id="apps-note" class="note apps-note"></p>
+    </div>
+  </section>
+
   <section id="settings-view" class="sheet" hidden aria-labelledby="settings-title">
     <div class="sheet-head">
       <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
       <h2 id="settings-title">Réglages</h2>
+      <button id="settings-info" class="round-btn page-info" type="button" aria-label="À quoi sert cette page ?"><span class="info-i" aria-hidden="true">i</span></button>
     </div>
     <div class="settings">
+      <div class="card glass setting">
+        <span class="label">Écrans : ordre du balayage</span>
+        <ol id="screen-order" class="screen-order"></ol>
+        <p class="note">Faites glisser le doigt vers la gauche ou la droite pour passer d’un écran à l’autre, dans cet ordre.</p>
+      </div>
+      <div class="card glass setting">
+        <span class="label">Applis utiles affichées</span>
+        <div id="apps-choice" class="chips apps-choice"></div>
+      </div>
       <div class="card glass setting">
         <label for="set-rate" class="label">Taux de change</label>
         <div class="setting-row">
@@ -383,6 +406,8 @@
     </div>
     <span id="crop-icon-tpl" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></span>
   </section>
+
+  <div id="screen-dots" class="screen-dots" aria-hidden="true" hidden></div>
 
   <div id="toast" class="toast" role="status" hidden>
     <span id="toast-msg"></span>
