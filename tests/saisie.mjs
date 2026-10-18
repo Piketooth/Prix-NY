@@ -9,7 +9,7 @@ await ctx.addInitScript(() => {
     sessionStorage.setItem('splash', '1');
     if (!localStorage.getItem('seeded')) {
       localStorage.setItem('seeded', '1');
-      localStorage.setItem('cart', JSON.stringify({ id: null, name: null, items: [{ id: 'x1', name: 'Taxi', category: 'transport', unit: 20, qty: 1, split: 1, opts: { tax: true, tip: false, tipPct: 0.2, tipBasis: 'pre' }, taxRate: 0.08875, exempt: false, price: 20, tax: 1.775, tip: 0, bill: 21.775, share: 21.775 }] }));
+      localStorage.setItem('cart', JSON.stringify({ id: null, name: null, items: [{ id: 'x1', name: 'Musée', category: 'visites', unit: 20, qty: 1, split: 1, opts: { tax: true, tip: false, tipPct: 0.2, tipBasis: 'pre' }, taxRate: 0.08875, exempt: false, price: 20, tax: 1.775, tip: 0, bill: 21.775, share: 21.775 }] }));
     }
   } catch {}
 });
@@ -27,12 +27,12 @@ const close = async () => { if (await p.isVisible('#keypad')) { await p.goBack()
 
 // 1, 5, 6. catégories
 const labels = await p.$$eval('.cat', (els) => els.map((e) => e.textContent));
-ok(`catégories: ${labels.join(' | ')}`, labels.length === 5 && labels[1].includes('Vêtements et chaussures') && labels[3].includes('Épicerie / Pharmacie') && !labels.some((l) => /Transport|Visites/.test(l)));
+ok(`catégories: ${labels.join(' | ')}`, labels.length === 6 && labels[4].includes('Transport') && labels[1].includes('Vêtements et chaussures') && labels[3].includes('Épicerie / Pharmacie') && !labels.some((l) => /Visites/.test(l)));
 const vis = await p.$$eval('.cat', (els) => els.every((e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; }));
 ok('toutes visibles', vis);
 // 2. bas d'écran
 ok('pas de bas d\'écran', !(await p.$('footer')) && !(await p.$('#refresh-btn')));
-// migration Transport → Autre
+// migration d'une catégorie supprimée (Visites) → Autre
 await p.click('#cart-open'); await p.waitForTimeout(400);
 ok(`migration: ${await p.getAttribute('.item-num', 'title')}`, (await p.getAttribute('.item-num', 'title')) === 'Autre : changer la catégorie');
 await p.click('#cart-clear'); await p.goBack(); await p.waitForTimeout(200);

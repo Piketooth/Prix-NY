@@ -39,8 +39,11 @@ const CATEGORIES = [
   { id: 'clothes', label: 'Vêtements et chaussures', emoji: '👕', color: '#9d8cf0' },
   { id: 'food', label: 'Resto', emoji: '🍔', color: '#ff7a59' },
   { id: 'grocery', label: 'Épicerie / Pharmacie', emoji: '🛒', color: '#3fb8a9' },
+  { id: 'transport', label: 'Transport', emoji: '🚕', color: '#5b9cf0' },
   { id: 'other', label: 'Autre', emoji: '✨', color: '#7a8499' },
 ];
+// Resto et Transport : pourboire possible et partage entre plusieurs personnes (une seule addition).
+const isShared = (id) => id === 'food' || id === 'transport';
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.at(-1);
 const FEE_PRESETS = [0, 1, 2, 3];
 
@@ -95,7 +98,8 @@ function compute({ unit, qty, split, category, opts }, taxes) {
   const exemptClothes = category === 'clothes' && unit < taxes.clothing.threshold;
   const exempt = exemptClothes || category === 'grocery';
   const exemptRate = exemptClothes ? taxes.clothing.rate : (taxes.grocery?.rate ?? 0);
-  const taxRate = opts.tax ? (exempt ? exemptRate : taxes.salesTax.rate) : 0;
+  // Transport : le prix affiché (compteur du taxi, appli VTC, ticket) inclut déjà taxes et suppléments.
+  const taxRate = !opts.tax || category === 'transport' ? 0 : (exempt ? exemptRate : taxes.salesTax.rate);
   const price = unit * qty;
   const tax = price * taxRate;
   const tip = opts.tip ? (opts.tipBasis === 'post' ? price + tax : price) * opts.tipPct : 0;
@@ -106,14 +110,14 @@ function compute({ unit, qty, split, category, opts }, taxes) {
 function readOptions() {
   return {
     tax: $('opt-tax').checked,
-    tip: state.category === 'food' && $('opt-tip').checked, // pourboire : Resto uniquement
+    tip: isShared(state.category) && $('opt-tip').checked, // pourboire : Resto et Transport uniquement
     tipPct: state.tipPct,
     tipBasis: document.querySelector('input[name="tip-basis"]:checked').value,
   };
 }
 
 function currentItem() {
-  const food = state.category === 'food';
+  const food = isShared(state.category);
   const base = {
     qty: food ? 1 : state.qty,
     split: food ? state.split : 1,
@@ -157,12 +161,15 @@ const showEur = (el, usdAmount) => {
 
 function render() {
   const it = currentItem();
-  const food = state.category === 'food';
+  const food = isShared(state.category);
   const fee = state.settings.fee;
 
   $('tip-card').hidden = !food;
   renderCatInfo(it);
   $('tip-panel').classList.toggle('off', !it.opts.tip);
+  // Transport : pas de taxe ajoutée, la base de calcul est sans objet ; le titre passe au-dessus des taux.
+  $('tip-panel').hidden = state.category === 'transport';
+  $('tip-card').classList.toggle('no-basis', state.category === 'transport');
   $('tip-choices').querySelectorAll('.chip').forEach((b) => {
     const c = Number(b.dataset.pct);
     b.setAttribute('aria-checked', String(it.opts.tip ? c === it.opts.tipPct : c === 0));
@@ -180,7 +187,8 @@ function render() {
   $('b-price-label').textContent = it.qty > 1 ? `Prix (${it.qty} × ${usd.format(it.unit)})` : 'Prix';
   $('b-price').textContent = usd.format(it.price);
   $('b-tax-row').hidden = !it.opts.tax;
-  $('b-tax').textContent = it.exempt && it.price > 0 ? 'exonéré' : `${usd.format(it.tax)} (${pct(it.taxRate)})`;
+  $('b-tax').textContent = it.category === 'transport' ? 'incluse dans le prix'
+    : it.exempt && it.price > 0 ? 'exonéré' : `${usd.format(it.tax)} (${pct(it.taxRate)})`;
   $('b-tip-row').hidden = !it.opts.tip;
   $('b-tip').textContent = `${usd.format(it.tip)} (${pct(it.opts.tipPct)})`;
   $('b-split-row').hidden = it.split <= 1;
@@ -228,6 +236,18 @@ const CAT_INFO = {
       'Ne sont pas concernés : sacs, bijoux, montres, lunettes de soleil (choisissez « Shopping »).',
     ],
   },
+  transport: {
+    short: () => 'Taxes déjà incluses dans le prix',
+    title: 'Transport',
+    body: () => [
+      'Aucune taxe n’est ajoutée : le prix affiché est le prix final.',
+      'Métro et bus : 3 $ le trajet en payant sans contact (OMNY), sans pourboire. Au-delà d’environ 35 $ dans la semaine, les trajets sont gratuits.',
+      'Taxi jaune : le compteur inclut déjà les suppléments (MTA, embouteillage au sud de la 60ᵉ rue…). Pourboire d’usage : 15 à 20 %, proposé sur l’écran de paiement.',
+      'Uber, Lyft : le prix de l’appli comprend la sales tax, le Black Car Fund et les suppléments. Pourboire facultatif de 15 à 20 %, donné dans l’appli.',
+      'Ferry, Citi Bike : prix fixe, sans pourboire.',
+      'Choisissez le pourboire au besoin et le nombre de passagers (👥) pour partager la course.',
+    ],
+  },
   grocery: {
     short: () => 'Exonéré de taxe',
     title: 'Épicerie / Pharmacie',
@@ -262,15 +282,16 @@ function setCategory(id) {
   const was = state.category;
   if (id === was) return;
   state.category = id;
-  // Au resto, le pourboire est la règle (il n'est proposé que dans cette catégorie).
+  // Au resto, le pourboire est la règle ; en transport, « Aucun » par défaut (métro, bus).
   if (id === 'food') $('opt-tip').checked = true;
+  if (id === 'transport') $('opt-tip').checked = false;
   renderCategories();
   render();
   haptic();
 }
 
 function step(delta) {
-  if (state.category === 'food') state.split = Math.min(20, Math.max(1, state.split + delta));
+  if (isShared(state.category)) state.split = Math.min(20, Math.max(1, state.split + delta));
   else state.qty = Math.min(99, Math.max(1, state.qty + delta));
   render();
   haptic();
@@ -457,7 +478,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 // Articles des versions précédentes (sans quantité ni catégorie).
 function migrateItem(it) {
   if (it.unit != null) {
-    return CATEGORIES.some((c) => c.id === it.category) ? it : { ...it, category: 'other' }; // Transport, Visites…
+    return CATEGORIES.some((c) => c.id === it.category) ? it : { ...it, category: 'other' }; // Visites…
   }
   return {
     id: it.id, name: it.name || '', category: 'shop', unit: it.price, qty: 1, split: 1,
@@ -622,13 +643,14 @@ function cartItemRow(it, i, kind = 'cart') {
   detail.className = 'item-detail';
   const parts = [`${c.emoji} ${usd.format(it.price)}`];
   if (it.tax) parts.push(`taxe ${usd.format(it.tax)}`);
+  else if (it.category === 'transport') parts.push('taxes incluses');
   else if (it.opts.tax) parts.push('exonéré');
   if (it.tip) parts.push(`pourboire ${usd.format(it.tip)}`);
   if (it.split > 1) parts.push(`÷ ${it.split}`);
   detail.textContent = parts.join(' + ').replace(' + ÷', ' ÷');
   main.append(name, detail);
 
-  if (it.category !== 'food') {
+  if (!isShared(it.category)) {
     const qty = document.createElement('div');
     qty.className = 'item-qty';
     const minus = document.createElement('button');
@@ -725,14 +747,17 @@ async function editPrice(it, kind) {
 function recategorize(it, id) {
   const opts = { ...it.opts };
   let { unit, qty, split } = it;
+  if (isShared(id) && !isShared(it.category)) {
+    unit *= qty; // une seule addition (resto) ou course (transport)
+    qty = 1;
+  }
   if (id === 'food' && it.category !== 'food') {
     opts.tip = true;
     opts.tipPct = state.taxes.tip.default;
     opts.tipBasis = 'pre';
-    unit *= qty; // au resto, une seule addition
-    qty = 1;
   }
-  if (id !== 'food') {
+  if (id === 'transport') opts.tip = false;
+  if (!isShared(id)) {
     opts.tip = false;
     split = 1;
   }
@@ -1785,6 +1810,7 @@ const VOICE_CATEGORIES = [
   { id: 'clothes', words: ['vêtement', 'vetement', 'habit', 'chaussure', 'basket', 'jean', 'pull', 'veste', 'clothes', 'clothing', 'shoe', 'sneaker', 'apparel', 'shirt'] },
   { id: 'food', words: ['resto', 'restaurant', 'repas', 'dîner', 'diner', 'déjeuner', 'dejeuner', 'brunch', 'bar', 'café', 'meal', 'dinner', 'lunch', 'breakfast'] },
   { id: 'grocery', words: ['épicerie', 'epicerie', 'supermarché', 'supermarche', 'pharmacie', 'médicament', 'medicament', 'courses', 'grocery', 'groceries', 'supermarket', 'pharmacy', 'drugstore', 'medicine'] },
+  { id: 'transport', words: ['taxi', 'uber', 'lyft', 'métro', 'metro', 'subway', 'bus', 'ferry', 'transport', 'course', 'cab'] },
   { id: 'shop', words: ['shopping', 'souvenir', 'boutique', 'magasin', 'cadeau', 'store', 'shop', 'gift'] },
   { id: 'other', words: ['autre', 'other', 'divers', 'misc'] },
 ];

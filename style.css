@@ -498,6 +498,8 @@ h1 { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -.5px; }
 .tip-row .segmented { margin-top: 0; }
 .tip-row .segmented span { padding: 3px 12px; font-size: 15px; }
 .tip-row .segmented.off { opacity: .4; pointer-events: none; }
+.tip-row .segmented[hidden] { display: none; }
+.tip-card.no-basis .tip-row { order: -1; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip {
