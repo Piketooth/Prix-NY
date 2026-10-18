@@ -1588,6 +1588,7 @@ window.addEventListener('popstate', () => {
     $(v.id).hidden = true;
     OVERLAYS[v.id]?.();
     if (v.id === 'edit-view') editing = null;
+    if (v.id === 'crop-view') cropFinish(null);
   }
   if (!openViews.some((x) => x.lockScroll)) document.body.classList.remove('no-scroll');
   document.body.dataset.view = openViews.at(-1)?.id || '';
@@ -1669,23 +1670,33 @@ async function loadCustomWallpapers() {
   customWps = customWps.filter((c) => customUrls.has(c.id));
 }
 
-// Recadre la photo au format de l'écran (9:16), la compresse et mesure sa luminosité.
-async function processPhoto(file) {
+const canvasBlob = (c, q) => new Promise((r) => c.toBlob(r, 'image/webp', q));
+
+// Original gardé (2560 px maximum) pour pouvoir recadrer la photo plus tard.
+async function photoSource(file) {
   const bmp = await createImageBitmap(file);
-  const target = 9 / 16;
-  let sw = bmp.width, sh = bmp.height;
-  if (sw / sh > target) sw = Math.round(sh * target); else sh = Math.round(sw / target);
-  const sx = Math.round((bmp.width - sw) / 2), sy = Math.round((bmp.height - sh) / 2);
-  const draw = (w, h) => {
+  const k = Math.min(1, 2560 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close?.();
+  return canvasBlob(c, 0.86);
+}
+
+// Découpe la zone choisie au format de l'écran, la compresse et mesure sa luminosité.
+async function processPhoto(src, { sx, sy, sw, sh }) {
+  const bmp = await createImageBitmap(src);
+  const ratio = innerHeight / innerWidth;
+  const draw = (w) => {
     const c = document.createElement('canvas');
-    c.width = w; c.height = h;
-    c.getContext('2d').drawImage(bmp, sx, sy, sw, sh, 0, 0, w, h);
+    c.width = w; c.height = Math.round(w * ratio);
+    c.getContext('2d').drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
     return c;
   };
-  const full = draw(1080, 1920);
-  const blob = await new Promise((r) => full.toBlob(r, 'image/webp', 0.78));
-  const thumb = draw(180, 320).toDataURL('image/webp', 0.7);
-  const px = draw(18, 32).getContext('2d').getImageData(0, 0, 18, 32).data;
+  const blob = await canvasBlob(draw(1080), 0.78);
+  const thumb = draw(180).toDataURL('image/webp', 0.7);
+  const small = draw(18);
+  const px = small.getContext('2d').getImageData(0, 0, small.width, small.height).data;
   let lum = 0;
   for (let i = 0; i < px.length; i += 4) lum += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
   lum /= px.length / 4;
@@ -1693,12 +1704,103 @@ async function processPhoto(file) {
   return { blob, thumb, tone: lum < 140 ? 'dark' : 'light' };
 }
 
+// --- Recadrage : la photo couvre tout l'écran, on la déplace et on zoome ----------
+
+const crop = { iw: 0, ih: 0, s: 1, min: 1, tx: 0, ty: 0, pts: new Map(), done: null };
+
+function cropClamp() {
+  const W = innerWidth, H = innerHeight;
+  crop.s = Math.min(crop.min * 4, Math.max(crop.min, crop.s));
+  crop.tx = Math.min(0, Math.max(W - crop.iw * crop.s, crop.tx));
+  crop.ty = Math.min(0, Math.max(H - crop.ih * crop.s, crop.ty));
+  $('crop-img').style.transform = `translate(${crop.tx}px, ${crop.ty}px) scale(${crop.s})`;
+  $('crop-zoom').value = Math.round((crop.s / crop.min) * 100);
+}
+
+// Zoom autour d'un point de l'écran (centre du pincement, curseur…).
+function cropZoom(s, cx = innerWidth / 2, cy = innerHeight / 2) {
+  const k = Math.min(crop.min * 4, Math.max(crop.min, s)) / crop.s;
+  crop.tx = cx - (cx - crop.tx) * k;
+  crop.ty = cy - (cy - crop.ty) * k;
+  crop.s *= k;
+  cropClamp();
+}
+
+function cropReset() {
+  crop.s = crop.min;
+  crop.tx = (innerWidth - crop.iw * crop.s) / 2;
+  crop.ty = (innerHeight - crop.ih * crop.s) / 2;
+  cropClamp();
+}
+
+function cropFinish(rect) {
+  const done = crop.done;
+  crop.done = null;
+  done?.(rect);
+}
+
+// Ouvre l'écran de recadrage ; renvoie la zone choisie (pixels de la source) ou null si annulé.
+async function openCrop(src) {
+  const img = $('crop-img');
+  const url = URL.createObjectURL(src);
+  img.src = url;
+  try { await img.decode(); } catch { URL.revokeObjectURL(url); return null; }
+  crop.iw = img.naturalWidth; crop.ih = img.naturalHeight;
+  img.style.width = `${crop.iw}px`; img.style.height = `${crop.ih}px`;
+  crop.min = Math.max(innerWidth / crop.iw, innerHeight / crop.ih);
+  crop.pts.clear();
+  cropReset();
+  openView('crop-view');
+  const rect = await new Promise((resolve) => { crop.done = resolve; });
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return rect;
+}
+
+function initCrop() {
+  const stage = $('crop-stage');
+  let last = null; // dernier état des doigts : { x, y, d } (centre et écart)
+  const gesture = () => {
+    const p = [...crop.pts.values()];
+    if (p.length === 1) return { x: p[0].x, y: p[0].y, d: 0 };
+    return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2, d: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) };
+  };
+  stage.addEventListener('pointerdown', (e) => {
+    try { stage.setPointerCapture(e.pointerId); } catch { /* pointeur déjà relâché */ }
+    crop.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    last = gesture();
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!crop.pts.has(e.pointerId)) return;
+    crop.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture();
+    if (last && g.d && last.d) cropZoom(crop.s * (g.d / last.d), g.x, g.y);
+    if (last) { crop.tx += g.x - last.x; crop.ty += g.y - last.y; cropClamp(); }
+    last = g;
+  });
+  const up = (e) => { crop.pts.delete(e.pointerId); last = crop.pts.size ? gesture() : null; };
+  stage.addEventListener('pointerup', up);
+  stage.addEventListener('pointercancel', up);
+  stage.addEventListener('wheel', (e) => { e.preventDefault(); cropZoom(crop.s * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX, e.clientY); }, { passive: false });
+  stage.addEventListener('dblclick', cropReset);
+  $('crop-zoom').addEventListener('input', () => cropZoom(crop.min * Number($('crop-zoom').value) / 100));
+  $('crop-reset').addEventListener('click', () => { cropReset(); haptic(); });
+  $('crop-cancel').addEventListener('click', () => history.back());
+  $('crop-ok').addEventListener('click', () => {
+    cropFinish({ sx: -crop.tx / crop.s, sy: -crop.ty / crop.s, sw: innerWidth / crop.s, sh: innerHeight / crop.s });
+    history.back();
+  });
+}
+
 async function addCustomWallpaper(file) {
   if (customWps.length >= CUSTOM_MAX) { toast(`${CUSTOM_MAX} photos maximum : supprimez-en une d'abord`); return; }
-  toast('Préparation de la photo…');
   try {
-    const { blob, thumb, tone } = await processPhoto(file);
+    const src = await photoSource(file);
+    const rect = await openCrop(src);
+    if (!rect) return;
+    toast('Préparation de la photo…');
+    const { blob, thumb, tone } = await processPhoto(src, rect);
     const id = `custom-${uid()}`;
+    await wpDb.put(`${id}-src`, src);
     await wpDb.put(id, blob);
     customUrls.set(id, URL.createObjectURL(blob));
     customWps.push({ id, label: `Ma photo ${customWps.length + 1}`, tone, thumb });
@@ -1714,10 +1816,36 @@ async function addCustomWallpaper(file) {
   }
 }
 
+// Recadre une photo déjà ajoutée (à partir de l'original, ou de l'image pour les photos plus anciennes).
+async function recropCustomWallpaper(id) {
+  const c = customWps.find((x) => x.id === id);
+  if (!c) return;
+  try {
+    const src = (await wpDb.get(`${id}-src`)) || (await wpDb.get(id));
+    if (!src) throw new Error('photo introuvable');
+    const rect = await openCrop(src);
+    if (!rect) return;
+    const { blob, thumb, tone } = await processPhoto(src, rect);
+    await wpDb.put(id, blob);
+    const old = customUrls.get(id);
+    customUrls.set(id, URL.createObjectURL(blob));
+    Object.assign(c, { thumb, tone });
+    store.set('customWallpapers', customWps);
+    if (wpCurrent === id) wpCurrent = null; // force l'affichage de la nouvelle image
+    applyWallpaper();
+    if (old) setTimeout(() => URL.revokeObjectURL(old), 2000);
+    haptic('success');
+    toast('Photo recadrée');
+  } catch {
+    haptic('warning');
+    toast('Impossible de recadrer cette photo');
+  }
+}
+
 async function removeCustomWallpaper(id) {
   customWps = customWps.filter((c) => c.id !== id);
   store.set('customWallpapers', customWps);
-  try { await wpDb.del(id); } catch { /* ignore */ }
+  try { await wpDb.del(id); await wpDb.del(`${id}-src`); } catch { /* ignore */ }
   const url = customUrls.get(id);
   customUrls.delete(id);
   if (state.settings.wallpaper === id) { state.settings.wallpaper = 'random'; store.set('settings', state.settings); }
@@ -1823,7 +1951,13 @@ function renderWallpaperSettings() {
       del.setAttribute('role', 'button');
       del.setAttribute('aria-label', `Retirer ${t.label}`);
       del.addEventListener('click', (e) => { e.stopPropagation(); removeCustomWallpaper(t.id); });
-      b.append(del);
+      const cut = document.createElement('span');
+      cut.className = 'wp-crop';
+      cut.append($('crop-icon-tpl').firstElementChild.cloneNode(true));
+      cut.setAttribute('role', 'button');
+      cut.setAttribute('aria-label', `Recadrer ${t.label}`);
+      cut.addEventListener('click', (e) => { e.stopPropagation(); recropCustomWallpaper(t.id); });
+      b.append(cut, del);
     }
     b.addEventListener('click', () => {
       if (t.id === 'add') { $('wp-file').click(); return; }
@@ -2140,6 +2274,10 @@ function init() {
   state.taxes = store.get('taxes') || DEFAULT_TAXES;
   initSettings();
   initClockSetting();
+  initCrop();
+  const cropIcon = $('crop-icon-tpl').firstElementChild.cloneNode(true);
+  cropIcon.classList.add('inline-icon');
+  $('wp-note').replaceChildren('« Ma photo » : choisissez jusqu’à 5 photos de votre téléphone, puis cadrez-les ; elles restent sur l’appareil. Touchez ', cropIcon, ' sur une photo pour la recadrer.');
   startClocks();
   loadCustomWallpapers().finally(applyWallpaper);
   $('wp-file').addEventListener('change', () => {

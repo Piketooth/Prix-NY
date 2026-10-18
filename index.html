@@ -254,7 +254,7 @@
         <span class="label">Fond d'écran</span>
         <div id="wp-gallery" class="wp-gallery" role="radiogroup" aria-label="Fond d'écran"></div>
         <input id="wp-file" type="file" accept="image/*" hidden>
-        <p class="note">« Ma photo » : choisissez jusqu'à 5 photos de votre téléphone ; elles restent sur l'appareil.</p>
+        <p id="wp-note" class="note">« Ma photo » : choisissez jusqu'à 5 photos de votre téléphone ; elles restent sur l'appareil.</p>
         <label class="check">
           <input id="opt-adaptive" type="checkbox" checked>
           <span class="box" aria-hidden="true"></span>
@@ -364,6 +364,25 @@
       </div>
     </form>
   </dialog>
+
+  <!-- Recadrage d'une photo personnelle : l'écran entier montre le futur fond -->
+  <section id="crop-view" class="crop-view" hidden aria-label="Recadrer la photo">
+    <div id="crop-stage" class="crop-stage"><img id="crop-img" alt=""></div>
+    <p class="crop-hint">Faites glisser et pincez pour cadrer la photo</p>
+    <div class="crop-bar">
+      <div class="range-row">
+        <span class="crop-zoom-icon" aria-hidden="true">−</span>
+        <input id="crop-zoom" class="range" type="range" min="100" max="400" step="1" value="100" aria-label="Zoom">
+        <span class="crop-zoom-icon" aria-hidden="true">+</span>
+      </div>
+      <div class="crop-actions">
+        <button id="crop-cancel" class="btn secondary" type="button">Annuler</button>
+        <button id="crop-reset" class="btn secondary" type="button">Recentrer</button>
+        <button id="crop-ok" class="btn" type="button">Valider</button>
+      </div>
+    </div>
+    <span id="crop-icon-tpl" hidden><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></span>
+  </section>
 
   <div id="toast" class="toast" role="status" hidden>
     <span id="toast-msg"></span>
