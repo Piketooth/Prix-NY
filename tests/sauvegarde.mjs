@@ -20,25 +20,46 @@ ok(`titre: ${await p.textContent('.mast-title')}`, (await p.textContent('.mast-t
 ok(`édition: ${await p.textContent('.mast-edition')}`, /1 \$ = 0,9 €/.test(await p.textContent('#rate-info')));
 
 // --- Fond personnalisé
-await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
 let tiles = await tileLabels();
 const base = tiles.length;
 ok(`tuiles: ${base}, Ma photo`, tiles.includes('Ma photo'));
-await p.setInputFiles('#wp-file', `${FIX}/bright.jpg`); await p.waitForTimeout(1500);
+await p.setInputFiles('#wp-file', `${FIX}/bright.jpg`);
+await p.waitForSelector('#crop-view:not([hidden])');
+ok('écran de recadrage', await p.isVisible('#crop-img'));
+// zoom ×2 puis glisser vers la gauche
+await p.fill('#crop-zoom', '200'); await p.dispatchEvent('#crop-zoom', 'input');
+const t1 = await p.$eval('#crop-img', (e) => e.style.transform);
+await p.mouse.move(200, 400); await p.mouse.down(); await p.mouse.move(80, 400, { steps: 5 }); await p.mouse.up();
+const t2 = await p.$eval('#crop-img', (e) => e.style.transform);
+ok(`déplacement: ${t1} → ${t2}`, t1 !== t2 && t2.includes('scale('));
+await p.click('#crop-ok'); await p.waitForTimeout(1500);
+ok('recadrage fermé', await p.isHidden('#crop-view'));
 tiles = await tileLabels();
 ok(`photo claire ajoutée: ${tiles}`, tiles.length === base + 1);
 ok(`thème clair: ${await cls()}`, (await cls()).includes('theme-light'));
 const sel = await p.evaluate(() => JSON.parse(localStorage.getItem('settings')).wallpaper);
 ok(`sélectionnée: ${sel}`, sel.startsWith('custom-'));
 await p.screenshot({ path: `${out}/v7-wp-settings.png` });
-await p.setInputFiles('#wp-file', `${FIX}/dark.jpg`); await p.waitForTimeout(1500);
+await p.setInputFiles('#wp-file', `${FIX}/dark.jpg`);
+await p.waitForSelector('#crop-view:not([hidden])'); await p.click('#crop-ok'); await p.waitForTimeout(1500);
+// Recadrer à nouveau la photo claire, puis annuler : rien ne change
+const thumbBefore = await p.evaluate(() => JSON.parse(localStorage.getItem('customWallpapers'))[0].thumb);
+await p.click('#wp-gallery .wp-tile .wp-crop'); await p.waitForSelector('#crop-view:not([hidden])');
+await p.click('#crop-cancel'); await p.waitForTimeout(400);
+ok('annuler le recadrage', (await p.isHidden('#crop-view')) && thumbBefore === await p.evaluate(() => JSON.parse(localStorage.getItem('customWallpapers'))[0].thumb));
+await p.click('#wp-gallery .wp-tile .wp-crop'); await p.waitForSelector('#crop-view:not([hidden])');
+await p.fill('#crop-zoom', '300'); await p.dispatchEvent('#crop-zoom', 'input');
+await p.click('#crop-ok'); await p.waitForTimeout(1200);
+ok('photo recadrée', thumbBefore !== await p.evaluate(() => JSON.parse(localStorage.getItem('customWallpapers'))[0].thumb));
+ok('retour aux réglages', await p.isVisible('#settings-view'));
 ok(`thème sombre avec photo sombre: ${await cls()}`, (await cls()).includes('theme-dark'));
 await p.goBack(); await p.waitForTimeout(400);
 await p.screenshot({ path: `${out}/v7-main-custom.png` });
 await p.reload(); await p.waitForTimeout(1500);
 const bg = await p.evaluate(() => [...document.querySelectorAll('*')].map(e => getComputedStyle(e).backgroundImage).filter(x => x.includes('blob:')).length);
 ok(`persistance après rechargement: ${bg} fond blob`, bg > 0);
-await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
 await p.click('#wp-gallery .wp-tile .wp-del'); await p.waitForTimeout(500);
 tiles = await tileLabels();
 ok(`suppression: ${tiles.length}`, tiles.length === base + 1);

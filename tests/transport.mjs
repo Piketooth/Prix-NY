@@ -1,0 +1,46 @@
+// Catégorie Transport : pas de taxe ajoutée, pourboire de taxi (20 %) par défaut, partage, explication ⓘ.
+import { chromium } from 'playwright';
+const out = process.argv[2];
+const scheme = process.argv[3] || 'light';
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme });
+await ctx.addInitScript(() => { sessionStorage.setItem('splash', '1'); if (!localStorage.getItem('s9')) { localStorage.setItem('s9', '1'); localStorage.setItem('settings', JSON.stringify({ wallpaper: 'none' })); } });
+const p = await ctx.newPage();
+const errs = []; p.on('pageerror', e => errs.push(e.message));
+await p.route('https://api.frankfurter.dev/**', r => r.fulfill({ json: { amount: 1, base: 'USD', date: '2026-10-16', rates: { EUR: 0.9 } } }));
+await p.route('https://open.er-api.com/**', r => r.abort());
+await p.goto('http://localhost:8765/');
+await p.waitForFunction(() => document.getElementById('rate-info').textContent.includes('0,9'));
+const ok = (label, cond) => console.log(cond ? 'OK  ' : 'FAIL', label);
+const keys = async (s) => { for (const ch of s) await p.click(`[data-key="${ch === ',' ? '.' : ch}"]`); };
+const close = async () => { if (await p.isVisible('#keypad')) { await p.goBack(); await p.waitForTimeout(150); } };
+
+ok('6 catégories', (await p.$$('#categories .cat')).length === 6);
+await p.click('#categories .cat:has-text("Transport")');
+await p.click('#price'); await keys('3'); await close();
+ok('pourboire 20 % par défaut (taxi)', (await p.getAttribute('#tip-choices .chip:has-text("20")', 'aria-checked')) === 'true');
+await p.click('#tip-choices .chip:has-text("Aucun")'); await p.waitForTimeout(200);
+ok(`métro sans taxe ni pourboire: ${await p.textContent('#total-sub')}`, (await p.textContent('#total-sub')) === 'Total : $3.00');
+ok(`texte court: ${await p.textContent('#cat-info-text')}`, (await p.isVisible('#cat-info')) && (await p.textContent('#cat-info-text')) === 'Taxes incluses · métro sans pourboire');
+ok('base de calcul masquée', await p.isHidden('#tip-panel'));
+await p.click('#cat-info'); await p.waitForTimeout(200);
+ok(`explication: ${await p.textContent('#info-title')}`, (await p.isVisible('#info-dialog')) && (await p.textContent('#info-body')).includes('Uber'));
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+await p.click('#price'); await p.click('[data-key=back]'); await keys('45'); await close();
+await p.click('#step-plus');
+await p.click('#tip-choices .chip:has-text("20")'); await p.waitForTimeout(200);
+ok(`taxi à 2 avec 20 %: ${await p.textContent('#total-sub')}`, (await p.textContent('#total-sub')) === 'Votre part : $27.00 · addition $54.00');
+ok(`taxe: ${await p.textContent('#b-tax')}`, (await p.textContent('#b-tax')) === 'incluse dans le prix');
+await p.click('#add-btn'); await p.waitForTimeout(600);
+await p.click('#cart-open'); await p.waitForTimeout(400);
+const d = await p.textContent('#cart-list .item-detail');
+ok(`panier: ${d}`, d.includes('taxes incluses') && d.includes('pourboire $9.00') && d.includes('÷ 2'));
+// Changer la catégorie dans le panier : Shopping → taxe ajoutée, plus de pourboire
+await p.click('#cart-list .item-num'); await p.click('#cat-choices .cat:has-text("Shopping")'); await p.waitForTimeout(300);
+const d2 = await p.textContent('#cart-list .item-detail');
+ok(`vers Shopping: ${d2}`, d2.includes('taxe $3.99') && !d2.includes('pourboire'));
+await p.goBack(); await p.waitForTimeout(300);
+ok(`voix « taxi 32 »: ${JSON.stringify(await p.evaluate(() => parseVoice('taxi 32 dollars')))}`, (await p.evaluate(() => parseVoice('taxi 32 dollars').category)) === 'transport');
+ok(`voix « courses » reste épicerie`, (await p.evaluate(() => parseVoice('courses 20').category)) === 'grocery');
+ok(`${scheme} erreurs JS: ${errs}`, errs.length === 0);
+await b.close();

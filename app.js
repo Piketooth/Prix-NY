@@ -39,8 +39,11 @@ const CATEGORIES = [
   { id: 'clothes', label: 'Vêtements et chaussures', emoji: '👕', color: '#9d8cf0' },
   { id: 'food', label: 'Resto', emoji: '🍔', color: '#ff7a59' },
   { id: 'grocery', label: 'Épicerie / Pharmacie', emoji: '🛒', color: '#3fb8a9' },
+  { id: 'transport', label: 'Transport', emoji: '🚕', color: '#5b9cf0' },
   { id: 'other', label: 'Autre', emoji: '✨', color: '#7a8499' },
 ];
+// Resto et Transport : pourboire possible et partage entre plusieurs personnes (une seule addition).
+const isShared = (id) => id === 'food' || id === 'transport';
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.at(-1);
 const FEE_PRESETS = [0, 1, 2, 3];
 
@@ -54,8 +57,16 @@ const state = {
   split: 1,
   // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
   // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
-  // adaptive : couleurs selon la photo ; frost : intensité du givré (0 léger → 100 fort)
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 30 },
+  // adaptive : couleurs selon la photo ; frost : intensité du givré (0 aucun → 100 fort)
+  // clock : deuxième horloge du bandeau (ville et fuseau horaire)
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2,
+    // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
+    screens: ['main', 'apps', 'cart', 'saved', 'settings'],
+    // apps : applis affichées, dans l'ordre choisi ; « c:paquet » pour celles ajoutées depuis le téléphone
+    apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
+    customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
+    // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour
+    frostAnim: { on: false, every: 20, from: 30, to: 90, dur: 4 } },
 };
 
 const store = {
@@ -95,7 +106,8 @@ function compute({ unit, qty, split, category, opts }, taxes) {
   const exemptClothes = category === 'clothes' && unit < taxes.clothing.threshold;
   const exempt = exemptClothes || category === 'grocery';
   const exemptRate = exemptClothes ? taxes.clothing.rate : (taxes.grocery?.rate ?? 0);
-  const taxRate = opts.tax ? (exempt ? exemptRate : taxes.salesTax.rate) : 0;
+  // Transport : le prix affiché (compteur du taxi, appli VTC, ticket) inclut déjà taxes et suppléments.
+  const taxRate = !opts.tax || category === 'transport' ? 0 : (exempt ? exemptRate : taxes.salesTax.rate);
   const price = unit * qty;
   const tax = price * taxRate;
   const tip = opts.tip ? (opts.tipBasis === 'post' ? price + tax : price) * opts.tipPct : 0;
@@ -106,14 +118,14 @@ function compute({ unit, qty, split, category, opts }, taxes) {
 function readOptions() {
   return {
     tax: $('opt-tax').checked,
-    tip: state.category === 'food' && $('opt-tip').checked, // pourboire : Resto uniquement
+    tip: isShared(state.category) && $('opt-tip').checked, // pourboire : Resto et Transport uniquement
     tipPct: state.tipPct,
     tipBasis: document.querySelector('input[name="tip-basis"]:checked').value,
   };
 }
 
 function currentItem() {
-  const food = state.category === 'food';
+  const food = isShared(state.category);
   const base = {
     qty: food ? 1 : state.qty,
     split: food ? state.split : 1,
@@ -157,12 +169,15 @@ const showEur = (el, usdAmount) => {
 
 function render() {
   const it = currentItem();
-  const food = state.category === 'food';
+  const food = isShared(state.category);
   const fee = state.settings.fee;
 
   $('tip-card').hidden = !food;
   renderCatInfo(it);
   $('tip-panel').classList.toggle('off', !it.opts.tip);
+  // Transport : pas de taxe ajoutée, la base de calcul est sans objet ; le titre passe au-dessus des taux.
+  $('tip-panel').hidden = state.category === 'transport';
+  $('tip-card').classList.toggle('no-basis', state.category === 'transport');
   $('tip-choices').querySelectorAll('.chip').forEach((b) => {
     const c = Number(b.dataset.pct);
     b.setAttribute('aria-checked', String(it.opts.tip ? c === it.opts.tipPct : c === 0));
@@ -180,7 +195,8 @@ function render() {
   $('b-price-label').textContent = it.qty > 1 ? `Prix (${it.qty} × ${usd.format(it.unit)})` : 'Prix';
   $('b-price').textContent = usd.format(it.price);
   $('b-tax-row').hidden = !it.opts.tax;
-  $('b-tax').textContent = it.exempt && it.price > 0 ? 'exonéré' : `${usd.format(it.tax)} (${pct(it.taxRate)})`;
+  $('b-tax').textContent = it.category === 'transport' ? 'incluse dans le prix'
+    : it.exempt && it.price > 0 ? 'exonéré' : `${usd.format(it.tax)} (${pct(it.taxRate)})`;
   $('b-tip-row').hidden = !it.opts.tip;
   $('b-tip').textContent = `${usd.format(it.tip)} (${pct(it.opts.tipPct)})`;
   $('b-split-row').hidden = it.split <= 1;
@@ -228,6 +244,18 @@ const CAT_INFO = {
       'Ne sont pas concernés : sacs, bijoux, montres, lunettes de soleil (choisissez « Shopping »).',
     ],
   },
+  transport: {
+    short: () => 'Taxes incluses · métro sans pourboire',
+    title: 'Transport',
+    body: () => [
+      'Aucune taxe n’est ajoutée : le prix affiché est le prix final.',
+      'Métro et bus : 3 $ le trajet en payant sans contact (OMNY), sans pourboire. Au-delà d’environ 35 $ dans la semaine, les trajets sont gratuits.',
+      'Taxi jaune : le compteur inclut déjà les suppléments (MTA, embouteillage au sud de la 60ᵉ rue…). Pourboire d’usage : 15 à 20 %, proposé sur l’écran de paiement.',
+      'Uber, Lyft : le prix de l’appli comprend la sales tax, le Black Car Fund et les suppléments. Pourboire facultatif de 15 à 20 %, donné dans l’appli.',
+      'Ferry, Citi Bike : prix fixe, sans pourboire.',
+      'Le pourboire de 20 % est proposé par défaut, comme pour un taxi : choisissez « Aucun » pour le métro, le bus ou le ferry. Réglez « Personnes » pour partager la course.',
+    ],
+  },
   grocery: {
     short: () => 'Exonéré de taxe',
     title: 'Épicerie / Pharmacie',
@@ -244,33 +272,54 @@ function renderCatInfo(it) {
   if (info) $('cat-info-text').textContent = info.short(it, state.taxes);
 }
 
-function showCatInfo() {
-  const info = CAT_INFO[state.category];
-  if (!info) return;
-  $('info-title').textContent = info.title;
-  const body = $('info-body');
-  body.replaceChildren();
-  for (const line of info.body(state.taxes)) {
+// Fenêtre d'explication : un titre et des paragraphes ; [« Titre », « texte »] met le début en gras.
+function showInfo(title, lines) {
+  $('info-title').textContent = title;
+  $('info-body').replaceChildren(...lines.map((line) => {
     const p = document.createElement('p');
-    p.textContent = line;
-    body.append(p);
-  }
+    if (Array.isArray(line)) {
+      const b = document.createElement('b');
+      b.textContent = `${line[0]} : `;
+      p.append(b, line[1]);
+    } else {
+      p.textContent = line;
+    }
+    return p;
+  }));
   $('info-dialog').showModal();
 }
+
+function showCatInfo() {
+  const info = CAT_INFO[state.category];
+  if (info) showInfo(info.title, info.body(state.taxes));
+}
+
+const PAGE_INFO = {
+  settings: ['Réglages', [
+    'Tout ce qui personnalise l’appli. Les réglages sont gardés sur le téléphone.',
+    ['Écrans', 'ordre dans lequel on passe d’un écran à l’autre en faisant glisser le doigt'],
+    ['Applis utiles', 'applis affichées dans la page de raccourcis, leur ordre, et vos propres applis'],
+    ['Taux de change', 'cours officiel de la BCE mis à jour, ou votre propre taux ; frais bancaires de votre carte'],
+    ['Taxe de vente', 'sales tax de New York ajoutée aux prix affichés, avec les exonérations'],
+    ['Saisie vocale', 'langue utilisée pour dicter les prix'],
+    ['Deuxième horloge', 'ville dont l’heure s’affiche sous le titre'],
+    ['Fond d’écran', 'photos de New York ou les vôtres, couleurs, givré fixe ou animé'],
+  ]],
+};
 
 function setCategory(id) {
   const was = state.category;
   if (id === was) return;
   state.category = id;
-  // Au resto, le pourboire est la règle (il n'est proposé que dans cette catégorie).
-  if (id === 'food') $('opt-tip').checked = true;
+  // Resto et taxi : le pourboire est la règle (« Aucun » à choisir pour le métro).
+  if (isShared(id)) $('opt-tip').checked = true;
   renderCategories();
   render();
   haptic();
 }
 
 function step(delta) {
-  if (state.category === 'food') state.split = Math.min(20, Math.max(1, state.split + delta));
+  if (isShared(state.category)) state.split = Math.min(20, Math.max(1, state.split + delta));
   else state.qty = Math.min(99, Math.max(1, state.qty + delta));
   render();
   haptic();
@@ -290,10 +339,194 @@ function renderEditionDate() {
   $('mast-date').textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+// --- Horloges du bandeau : New York et une ville au choix ---------------------
+
+const NY_TZ = 'America/New_York';
+// Noms français et villes sans fuseau propre ; les autres villes sont cherchées dans les fuseaux du navigateur.
+const CITY_ALIASES = [
+  ['Paris', 'Europe/Paris'], ['Lyon', 'Europe/Paris'], ['Marseille', 'Europe/Paris'], ['Toulouse', 'Europe/Paris'],
+  ['Nice', 'Europe/Paris'], ['Nantes', 'Europe/Paris'], ['Bordeaux', 'Europe/Paris'], ['Lille', 'Europe/Paris'],
+  ['Strasbourg', 'Europe/Paris'], ['Montpellier', 'Europe/Paris'], ['Rennes', 'Europe/Paris'], ['Grenoble', 'Europe/Paris'],
+  ['Ajaccio', 'Europe/Paris'], ['Londres', 'Europe/London'], ['Bruxelles', 'Europe/Brussels'], ['Genève', 'Europe/Zurich'],
+  ['Lausanne', 'Europe/Zurich'], ['Zurich', 'Europe/Zurich'], ['Luxembourg', 'Europe/Luxembourg'], ['Monaco', 'Europe/Monaco'],
+  ['Berlin', 'Europe/Berlin'], ['Munich', 'Europe/Berlin'], ['Rome', 'Europe/Rome'], ['Milan', 'Europe/Rome'],
+  ['Madrid', 'Europe/Madrid'], ['Barcelone', 'Europe/Madrid'], ['Lisbonne', 'Europe/Lisbon'], ['Amsterdam', 'Europe/Amsterdam'],
+  ['Vienne', 'Europe/Vienna'], ['Varsovie', 'Europe/Warsaw'], ['Prague', 'Europe/Prague'], ['Athènes', 'Europe/Athens'],
+  ['Moscou', 'Europe/Moscow'], ['Istanbul', 'Europe/Istanbul'], ['Dublin', 'Europe/Dublin'], ['Copenhague', 'Europe/Copenhagen'],
+  ['Montréal', 'America/Toronto'], ['Québec', 'America/Toronto'], ['Toronto', 'America/Toronto'], ['Washington', 'America/New_York'],
+  ['Boston', 'America/New_York'], ['Miami', 'America/New_York'], ['Chicago', 'America/Chicago'], ['Los Angeles', 'America/Los_Angeles'],
+  ['San Francisco', 'America/Los_Angeles'], ['Las Vegas', 'America/Los_Angeles'], ['Mexico', 'America/Mexico_City'],
+  ['Rio de Janeiro', 'America/Sao_Paulo'], ['São Paulo', 'America/Sao_Paulo'], ['Buenos Aires', 'America/Argentina/Buenos_Aires'],
+  ['Alger', 'Africa/Algiers'], ['Casablanca', 'Africa/Casablanca'], ['Tunis', 'Africa/Tunis'], ['Dakar', 'Africa/Dakar'],
+  ['Abidjan', 'Africa/Abidjan'], ['Le Caire', 'Africa/Cairo'], ['Dubaï', 'Asia/Dubai'], ['Pékin', 'Asia/Shanghai'],
+  ['Shanghai', 'Asia/Shanghai'], ['Hong Kong', 'Asia/Hong_Kong'], ['Tokyo', 'Asia/Tokyo'], ['Séoul', 'Asia/Seoul'],
+  ['Singapour', 'Asia/Singapore'], ['Bangkok', 'Asia/Bangkok'], ['New Delhi', 'Asia/Kolkata'], ['Bombay', 'Asia/Kolkata'],
+  ['Sydney', 'Australia/Sydney'], ['Melbourne', 'Australia/Melbourne'], ['La Réunion', 'Indian/Reunion'],
+  ['Saint-Denis (Réunion)', 'Indian/Reunion'], ['Mayotte', 'Indian/Mayotte'], ['Martinique', 'America/Martinique'],
+  ['Fort-de-France', 'America/Martinique'], ['Guadeloupe', 'America/Guadeloupe'], ['Pointe-à-Pitre', 'America/Guadeloupe'],
+  ['Cayenne', 'America/Cayenne'], ['Tahiti', 'Pacific/Tahiti'], ['Papeete', 'Pacific/Tahiti'], ['Nouméa', 'Pacific/Noumea'],
+];
+const normCity = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-_'’]/g, ' ').replace(/\s+/g, ' ').trim();
+let cityIndex = null;
+
+function cities() {
+  if (cityIndex) return cityIndex;
+  const seen = new Set();
+  cityIndex = [];
+  const add = (label, tz) => {
+    const key = normCity(label);
+    if (seen.has(key)) return;
+    seen.add(key);
+    cityIndex.push({ label, tz, key });
+  };
+  for (const [label, tz] of CITY_ALIASES) add(label, tz);
+  let zones = [];
+  try { zones = Intl.supportedValuesOf('timeZone'); } catch { /* navigateur ancien : alias seuls */ }
+  for (const tz of zones) {
+    const city = tz.split('/').pop();
+    if (/^(GMT|UTC|Etc)/.test(city)) continue;
+    add(city.replace(/_/g, ' '), tz);
+  }
+  return cityIndex;
+}
+
+function findCities(text, max = 5) {
+  const q = normCity(text);
+  if (q.length < 2) return [];
+  const all = cities();
+  const starts = all.filter((c) => c.key.startsWith(q));
+  const inside = all.filter((c) => !c.key.startsWith(q) && c.key.includes(q));
+  return [...starts, ...inside].slice(0, max);
+}
+
+// Décalage en minutes d'un fuseau par rapport à UTC, à l'instant d.
+function tzOffset(tz, d) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(d).map((x) => [x.type, x.value]));
+  return Math.round((Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - Math.floor(d / 60000) * 60000) / 60000);
+}
+
+function renderClocks() {
+  const now = new Date();
+  const time = (tz) => now.toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+  const { label, tz } = state.settings.clock;
+  $('clock-ny').textContent = `New York ${time(NY_TZ)}`;
+  if (tz === NY_TZ) { $('clock-home').textContent = ''; return; }
+  const diff = (tzOffset(tz, now) - tzOffset(NY_TZ, now)) / 60;
+  const sign = diff >= 0 ? '+' : '−';
+  const h = Math.abs(diff).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  $('clock-home').textContent = `${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}`;
+}
+
+function startClocks() {
+  renderClocks();
+  // Recalée sur le début de chaque minute.
+  setTimeout(() => { renderClocks(); setInterval(renderClocks, 60000); }, 60000 - (Date.now() % 60000) + 50);
+}
+
+function setClockCity(c) {
+  state.settings.clock = { label: c.label, tz: c.tz };
+  store.set('settings', state.settings);
+  $('set-city').value = c.label;
+  $('city-suggest').replaceChildren();
+  $('city-note').textContent = `Heure de ${c.label} affichée sous le titre, à côté de celle de New York.`;
+  renderClocks();
+}
+
+// Ville dictée : la première transcription qui correspond à une ville connue.
+async function cityByVoice() {
+  const matches = await listen({ btn: $('city-voice'), prompt: 'Dites une ville', lang: 'fr-FR' });
+  if (!matches) return;
+  for (const m of matches) {
+    const q = normCity(m);
+    const c = cities().find((x) => x.key === q) || findCities(m, 1)[0];
+    if (c) { setClockCity(c); haptic('success'); return; }
+  }
+  haptic('warning');
+  $('city-note').textContent = matches.length ? `« ${matches[0]} » introuvable : essayez une grande ville du même fuseau horaire.` : 'Pas compris, réessayez.';
+}
+
+// Ville de l'endroit où l'on se trouve : fuseau du téléphone (réglé par le réseau), nom de la ville
+// par géolocalisation (BigDataCloud, sans clé), ou à défaut celui du fuseau.
+async function cityByLocation() {
+  const btn = $('city-locate');
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const fromTz = cities().find((c) => c.tz === tz && CITY_ALIASES.some(([, z]) => z === tz)) || cities().find((c) => c.tz === tz);
+  btn.classList.add('busy');
+  $('city-note').textContent = 'Localisation…';
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      if (!navigator.geolocation) { reject(new Error('indisponible')); return; }
+      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 15000, maximumAge: 3600000 });
+    });
+    const { latitude, longitude } = pos.coords;
+    const geo = await fetchJson(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=fr`);
+    const name = geo.city || geo.locality;
+    if (!name) throw new Error('ville inconnue');
+    const known = cities().find((c) => c.key === normCity(name));
+    setClockCity({ label: name, tz: known?.tz || tz });
+    haptic('success');
+  } catch (e) {
+    if (e?.code === 1) { // PERMISSION_DENIED
+      $('city-note').textContent = 'Localisation refusée : autorisez-la pour l’appli dans les réglages du téléphone, ou tapez la ville.';
+      haptic('warning');
+    } else if (fromTz) {
+      setClockCity(fromTz); // hors ligne ou sans GPS : la ville du fuseau du téléphone
+    } else {
+      $('city-note').textContent = 'Position introuvable : tapez la ville.';
+    }
+  } finally {
+    btn.classList.remove('busy');
+  }
+}
+
+function initClockSetting() {
+  $('city-voice').addEventListener('click', cityByVoice);
+  $('city-locate').addEventListener('click', cityByLocation);
+  const input = $('set-city');
+  const box = $('city-suggest');
+  input.value = state.settings.clock.label;
+  // Aide avec les mêmes icônes que les boutons micro et position.
+  const icon = (id) => {
+    const i = $(id).querySelector('svg').cloneNode(true);
+    i.classList.add('inline-icon');
+    return i;
+  };
+  $('city-note').replaceChildren(
+    'Tapez une ville (Paris, Montréal, Genève, Tokyo…), dites-la avec ', icon('city-voice'),
+    ' ou touchez ', icon('city-locate'), ' pour celle où vous êtes : son heure s’affiche sous le titre, à côté de celle de New York.',
+  );
+  // Champ vidé au toucher (ville actuelle en indication) pour taper directement la nouvelle.
+  input.addEventListener('focus', () => { input.placeholder = state.settings.clock.label; input.value = ''; });
+  input.addEventListener('input', () => {
+    box.replaceChildren();
+    for (const c of findCities(input.value)) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.textContent = c.label;
+      b.addEventListener('click', () => { setClockCity(c); haptic(); });
+      box.append(b);
+    }
+  });
+  // Validation en quittant le champ (après un éventuel toucher sur une suggestion).
+  input.addEventListener('blur', () => setTimeout(() => {
+    if (input.value === state.settings.clock.label) { box.replaceChildren(); return; }
+    const q = normCity(input.value);
+    if (!q) { input.value = state.settings.clock.label; return; } // rien tapé : on garde la ville
+    const exact = cities().find((c) => c.key === q) || findCities(input.value, 1)[0];
+    if (exact) setClockCity(exact);
+    else $('city-note').textContent = `« ${input.value} » introuvable : essayez une grande ville du même fuseau horaire.`;
+  }, 250));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+}
+
 // Taux affiché dans la ligne d'édition du bandeau (court) ; le détail complet en infobulle.
 function renderRateInfo(offline) {
   const fx = state.fx;
   const el = $('rate-info');
+  renderRateChecked();
   // Court dans le bandeau (« +2 % »), en toutes lettres dans l'infobulle.
   const feeShort = state.settings.fee ? ` · +${pct(state.settings.fee / 100)}` : '';
   const fee = state.settings.fee ? ` · frais bancaires ${pct(state.settings.fee / 100)}` : '';
@@ -370,21 +603,53 @@ async function loadTaxes() {
   render();
 }
 
+// Renvoie 'new' (cours plus récent), 'same' (déjà le dernier publié) ou 'offline'.
 async function loadRate() {
+  const before = state.fx?.date;
   for (const src of RATE_SOURCES) {
     try {
-      const fx = src.parse(await fetchJson(src.url));
+      const fx = { ...src.parse(await fetchJson(src.url)), checkedAt: Date.now() };
       if (!(fx.rate > 0)) throw new Error('taux invalide');
       state.fx = fx;
       store.set('fx', fx);
       renderRateInfo(false);
       renderAll();
-      return;
+      return before && fx.date <= before ? 'same' : 'new';
     } catch { /* on essaie la source suivante */ }
   }
   state.fx = store.get('fx');
   renderRateInfo(true);
   renderAll();
+  return 'offline';
+}
+
+const RATE_REFRESH_MS = 30 * 60 * 1000;
+
+// Bouton « Mettre à jour le cours » des Réglages.
+async function refreshRate() {
+  const btn = $('rate-refresh');
+  btn.disabled = true;
+  btn.textContent = 'Mise à jour…';
+  const result = await loadRate();
+  btn.disabled = false;
+  btn.textContent = '↻ Mettre à jour le cours';
+  const d = state.fx ? new Date(state.fx.date + 'T12:00:00').toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '';
+  if (result === 'new') { haptic('success'); toast(`Cours mis à jour : celui du ${d}`); }
+  else if (result === 'same') { haptic(); toast(`Déjà le dernier cours publié (${d})`); }
+  else { haptic('warning'); toast(d ? `Pas de connexion : cours du ${d} conservé` : 'Pas de connexion'); }
+}
+
+// Date du cours et heure de la dernière vérification, sous le bouton.
+function renderRateChecked() {
+  const fx = state.fx;
+  const el = $('rate-checked');
+  if (!fx) { el.textContent = 'Aucun cours enregistré.'; return; }
+  const day = new Date(fx.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const checked = fx.checkedAt ? new Date(fx.checkedAt) : null;
+  const when = checked
+    ? ` Vérifié ${checked.toDateString() === new Date().toDateString() ? 'aujourd’hui' : `le ${checked.toLocaleDateString('fr-FR')}`} à ${checked.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.`
+    : '';
+  el.textContent = `Cours du ${day} (${fx.source}).${when} La BCE publie un cours les jours ouvrés vers 16 h (heure de Paris) : le week-end, c’est celui du vendredi.`;
 }
 
 // --- Retours haptiques et partage (natifs dans l'APK) ------------------------
@@ -457,7 +722,7 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 // Articles des versions précédentes (sans quantité ni catégorie).
 function migrateItem(it) {
   if (it.unit != null) {
-    return CATEGORIES.some((c) => c.id === it.category) ? it : { ...it, category: 'other' }; // Transport, Visites…
+    return CATEGORIES.some((c) => c.id === it.category) ? it : { ...it, category: 'other' }; // Visites…
   }
   return {
     id: it.id, name: it.name || '', category: 'shop', unit: it.price, qty: 1, split: 1,
@@ -622,13 +887,14 @@ function cartItemRow(it, i, kind = 'cart') {
   detail.className = 'item-detail';
   const parts = [`${c.emoji} ${usd.format(it.price)}`];
   if (it.tax) parts.push(`taxe ${usd.format(it.tax)}`);
+  else if (it.category === 'transport') parts.push('taxes incluses');
   else if (it.opts.tax) parts.push('exonéré');
   if (it.tip) parts.push(`pourboire ${usd.format(it.tip)}`);
   if (it.split > 1) parts.push(`÷ ${it.split}`);
   detail.textContent = parts.join(' + ').replace(' + ÷', ' ÷');
   main.append(name, detail);
 
-  if (it.category !== 'food') {
+  if (!isShared(it.category)) {
     const qty = document.createElement('div');
     qty.className = 'item-qty';
     const minus = document.createElement('button');
@@ -725,14 +991,14 @@ async function editPrice(it, kind) {
 function recategorize(it, id) {
   const opts = { ...it.opts };
   let { unit, qty, split } = it;
-  if (id === 'food' && it.category !== 'food') {
+  if (isShared(id) && !isShared(it.category)) {
+    unit *= qty; // une seule addition (resto) ou course (transport)
+    qty = 1;
     opts.tip = true;
     opts.tipPct = state.taxes.tip.default;
     opts.tipBasis = 'pre';
-    unit *= qty; // au resto, une seule addition
-    qty = 1;
   }
-  if (id !== 'food') {
+  if (!isShared(id)) {
     opts.tip = false;
     split = 1;
   }
@@ -1188,7 +1454,25 @@ function initSettings() {
     if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper) || /^custom-/.test(s.wallpaper || '')) state.settings.wallpaper = s.wallpaper;
     if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
     if (s.adaptive === false) state.settings.adaptive = false;
-    if (Number.isFinite(s.frost)) state.settings.frost = Math.min(100, Math.max(0, s.frost));
+    if (Number.isFinite(s.frost)) {
+      // Ancienne échelle (0 = déjà 55 % d'opacité) : même rendu sur la nouvelle, qui part de 0.
+      const f = s.frostScale === 2 ? s.frost : Math.round((55 + 0.3 * s.frost) / 0.85);
+      state.settings.frost = Math.min(100, Math.max(0, f));
+    }
+    // Ancien ordre par défaut (Applis après Mes paniers) : nouvel ordre par défaut, Applis juste après l'accueil.
+    if (Array.isArray(s.screens) && s.screens.length === SCREEN_IDS.length && SCREEN_IDS.every((id) => s.screens.includes(id))
+      && s.screens.join() !== 'main,cart,saved,apps,settings') state.settings.screens = s.screens;
+    if (Array.isArray(s.customApps)) state.settings.customApps = s.customApps.filter((a) => a?.pkg && a?.name);
+    const custom = state.settings.customApps.map((c) => `c:${c.pkg}`);
+    const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
+    state.settings.apps = [...apps, ...custom.filter((id) => !apps.includes(id))];
+    if (s.frostAnim) {
+      const f = s.frostAnim, num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
+      state.settings.frostAnim = { on: !!f.on, every: num(f.every, 5, 300, 20), from: num(f.from, 0, 100, 30), to: num(f.to, 0, 100, 90), dur: num(f.dur, 1, 60, 4) };
+    }
+    if (s.clock?.tz && s.clock?.label) {
+      try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz }; } catch { /* fuseau inconnu */ }
+    }
   }
   $('set-rate').value = state.settings.rate ? String(state.settings.rate).replace('.', ',') : '';
   $('set-rate').addEventListener('input', () => {
@@ -1319,6 +1603,10 @@ const OVERLAYS = {
     $('price').blur();
   },
   kbd: () => { if (typeof Kbd !== 'undefined') Kbd.hide(); },
+  'main-menu': () => {
+    $('main-menu').hidden = true;
+    $('menu-open').setAttribute('aria-expanded', 'false');
+  },
 };
 
 function openView(id, lockScroll = true) {
@@ -1338,15 +1626,392 @@ function openView(id, lockScroll = true) {
 }
 
 window.addEventListener('popstate', () => {
+  if (skipPop) { skipPop--; return; }
   const v = openViews.pop();
   if (v) {
     $(v.id).hidden = true;
     OVERLAYS[v.id]?.();
     if (v.id === 'edit-view') editing = null;
+    if (v.id === 'crop-view') cropFinish(null);
   }
   if (!openViews.some((x) => x.lockScroll)) document.body.classList.remove('no-scroll');
   document.body.dataset.view = openViews.at(-1)?.id || '';
+  // Retour à l'accueil après un balayage : on saute les entrées d'historique devenues inutiles.
+  if (!openViews.length && ghostEntries) {
+    skipPop = 1;
+    const k = ghostEntries;
+    ghostEntries = 0;
+    history.go(-k);
+  }
 });
+
+// --- Écrans : balayage gauche / droite, dans l'ordre choisi dans les Réglages -------
+
+const SCREENS = {
+  main: { label: 'Accueil', view: null },
+  cart: { label: 'Panier', view: 'cart-view' },
+  saved: { label: 'Mes paniers', view: 'saved-view' },
+  apps: { label: 'Applis utiles', view: 'apps-view' },
+  settings: { label: 'Réglages', view: 'settings-view' },
+};
+const SCREEN_IDS = Object.keys(SCREENS);
+let ghostEntries = 0; // entrées d'historique laissées par des écrans fermés en balayant
+let skipPop = 0;
+
+const screenOfView = (view) => SCREEN_IDS.find((id) => SCREENS[id].view === view);
+
+// Écran affiché, ou null si une fenêtre, le pavé, le clavier ou un écran hors balayage est ouvert.
+function currentScreen() {
+  if (document.querySelector('dialog[open]')) return null;
+  if (openViews.some((v) => !screenOfView(v.id))) return null;
+  return openViews.length ? screenOfView(openViews.at(-1).id) : 'main';
+}
+
+function showDots(screen) {
+  const box = $('screen-dots');
+  box.replaceChildren(...state.settings.screens.map((id) => {
+    const i = document.createElement('i');
+    if (id === screen) i.className = 'on';
+    return i;
+  }));
+  box.hidden = false;
+  clearTimeout(showDots.t);
+  showDots.t = setTimeout(() => { box.hidden = true; }, 1200);
+}
+
+function animateIn(els, dir) {
+  for (const el of els) {
+    el.classList.remove('swipe-next', 'swipe-prev');
+    void el.offsetWidth;
+    el.classList.add(`swipe-${dir}`);
+    el.addEventListener('animationend', () => el.classList.remove(`swipe-${dir}`), { once: true });
+  }
+}
+
+function goScreen(screen, dir) {
+  const cur = currentScreen();
+  if (!cur || screen === cur) return false;
+  // Un seul écran reste ouvert (ex. Mes paniers ouvert depuis le Panier).
+  while (openViews.length > 1) {
+    $(openViews.pop().id).hidden = true;
+    ghostEntries++;
+  }
+  const top = openViews[0]?.id;
+  const view = SCREENS[screen].view;
+  if (!view) {
+    history.back();
+    animateIn([document.querySelector('main'), document.querySelector('header')], dir);
+  } else if (!top) {
+    openView(view);
+  } else {
+    $(top).hidden = true;
+    $(view).hidden = false;
+    openViews[0] = { id: view, lockScroll: true };
+    history.replaceState({ view }, '');
+    document.body.dataset.view = view;
+  }
+  if (view) {
+    $(view).scrollTop = 0;
+    animateIn([$(view)], dir);
+    if (screen === 'apps') renderApps();
+  }
+  showDots(screen);
+  haptic();
+  return true;
+}
+
+function swipe(delta) {
+  const cur = currentScreen();
+  if (!cur) return;
+  const order = state.settings.screens;
+  const next = order[order.indexOf(cur) + delta];
+  if (next) goScreen(next, delta > 0 ? 'next' : 'prev');
+}
+
+function initSwipe() {
+  let start = null;
+  // Zones qui ont leur propre geste horizontal : articles (glisser pour supprimer), curseurs, recadrage…
+  const NO_SWIPE = '.item-wrap, input[type="range"], .crop-view, dialog, #keypad, #kbd, textarea, .wp-gallery';
+  document.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    start = e.touches.length === 1 && !e.target.closest(NO_SWIPE) ? { x: t.clientX, y: t.clientY, at: Date.now() } : null;
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) start = null; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x, dy = t.clientY - start.y;
+    const quick = Date.now() - start.at < 1000;
+    start = null;
+    if (quick && Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) swipe(dx < 0 ? 1 : -1);
+  });
+}
+
+function renderScreenOrder() {
+  const list = $('screen-order');
+  const order = state.settings.screens;
+  list.replaceChildren(...order.map((id, i) => {
+    const li = document.createElement('li');
+    const n = document.createElement('span');
+    n.className = 'n';
+    n.textContent = i + 1;
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = SCREENS[id].label;
+    const move = (d, label, text) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = text;
+      b.disabled = !order[i + d];
+      b.setAttribute('aria-label', `${label} : ${SCREENS[id].label}`);
+      b.addEventListener('click', () => {
+        [order[i], order[i + d]] = [order[i + d], order[i]];
+        store.set('settings', state.settings);
+        renderScreenOrder();
+        haptic();
+      });
+      return b;
+    };
+    li.append(n, name, move(-1, 'Monter', '▲'), move(1, 'Descendre', '▼'));
+    return li;
+  }));
+}
+
+// --- Applis utiles : ouvrir l'appli si elle est installée, sinon sa page du Play Store -------
+
+const APPS = [
+  { id: 'maps', pkg: 'com.google.android.apps.maps', name: 'Google Maps', desc: 'Plans, itinéraires', emoji: '🗺️', color: '#7fc8a9', use: 'plans, itinéraires à pied, en métro ou en voiture, horaires des magasins et des musées' },
+  { id: 'citymapper', pkg: 'com.citymapper.app.release', name: 'Citymapper', desc: 'Métro, bus, à pied', emoji: '🧭', color: '#9be15d', use: 'le meilleur trajet en transports en commun, avec la bonne sortie de métro et les perturbations' },
+  { id: 'mta', pkg: 'info.mta.mymta', name: 'MTA', desc: 'Métro et bus en direct', emoji: '🚇', color: '#5b9cf0', use: 'l’appli officielle du métro et des bus : passages en temps réel, travaux, plans' },
+  { id: 'uber', pkg: 'com.ubercab', name: 'Uber', desc: 'VTC', emoji: '🚗', color: '#c9ced6', use: 'VTC : prix annoncé avant de commander, paiement dans l’appli' },
+  { id: 'lyft', pkg: 'me.lyft.android', name: 'Lyft', desc: 'VTC', emoji: '🚙', color: '#ff8fc8', use: 'VTC concurrent d’Uber : comparez les prix selon l’heure' },
+  { id: 'curb', pkg: 'com.ridecharge.android.taximagic', name: 'Curb', desc: 'Taxis jaunes', emoji: '🚕', color: '#ffd23f', use: 'commander et payer un taxi jaune depuis le téléphone' },
+  { id: 'citibike', pkg: 'com.citibikenyc.citibike', name: 'Citi Bike', desc: 'Vélos en libre-service', emoji: '🚲', color: '#6ec6ff', use: 'vélos en libre-service : stations, vélos et places libres, location à la course ou à la journée' },
+  { id: 'ferry', pkg: 'co.bytemark.nycf', name: 'NYC Ferry', desc: 'Navettes fluviales', emoji: '⛴️', color: '#7fb3ff', use: 'navettes fluviales vers Brooklyn, Queens et Rockaway : horaires et billets' },
+  { id: 'translate', pkg: 'com.google.android.apps.translate', name: 'Traduction', desc: 'Google Traduction', emoji: '🌐', color: '#8ab4f8', use: 'traduire un menu, une étiquette ou une conversation, aussi avec l’appareil photo' },
+  { id: 'wallet', pkg: 'com.google.android.apps.walletnfcrel', name: 'Google Wallet', desc: 'Payer, OMNY', emoji: '💳', color: '#ffb734', use: 'payer sans contact avec le téléphone, y compris le métro et le bus (OMNY)' },
+  { id: 'wise', pkg: 'com.transferwise.android', name: 'Wise', desc: 'Carte sans frais', emoji: '💸', color: '#b5e48c', use: 'carte et compte multidevises, sans frais de change cachés' },
+  { id: 'yelp', pkg: 'com.yelp.android', name: 'Yelp', desc: 'Restos, avis', emoji: '⭐', color: '#ff7a59', use: 'trouver restaurants, bars et magasins avec les avis et les photos' },
+  { id: 'opentable', pkg: 'com.opentable', name: 'OpenTable', desc: 'Réserver un resto', emoji: '🍽️', color: '#ff9e9e', use: 'réserver une table au restaurant' },
+  { id: 'todaytix', pkg: 'com.todaytix.TodayTix', name: 'TodayTix', desc: 'Billets de spectacles', emoji: '🎭', color: '#f6a6ff', use: 'billets de Broadway et de spectacles, loteries et places à prix réduit du jour' },
+];
+const appInstalled = new Map(); // pkg → true / false (APK seulement)
+const playUrl = (pkg) => `https://play.google.com/store/apps/details?id=${pkg}`;
+
+// Applis affichées : celles de la liste cochées, puis celles ajoutées depuis le téléphone.
+const customApp = (c) => ({ id: `c:${c.pkg}`, pkg: c.pkg, name: c.name, desc: 'Mon appli', use: 'appli ajoutée depuis votre téléphone', emoji: '📱', color: '#7a8499', custom: true });
+const appById = (id) => APPS.find((a) => a.id === id)
+  || (id.startsWith('c:') && state.settings.customApps.some((c) => `c:${c.pkg}` === id) ? customApp(state.settings.customApps.find((c) => `c:${c.pkg}` === id)) : null);
+// Applis affichées dans l'ordre choisi ; dans l'APK, celles qui ne sont pas installées passent à la fin.
+const shownApps = () => {
+  const list = state.settings.apps.map(appById).filter(Boolean);
+  return [...list.filter((a) => appInstalled.get(a.pkg) !== false), ...list.filter((a) => appInstalled.get(a.pkg) === false)];
+};
+const appIcons = new Map(); // pkg → icône officielle (data URL), lue sur le téléphone
+
+async function checkApps(apps) {
+  if (!IS_NATIVE) return;
+  const cap = window.Capacitor;
+  await Promise.all(apps.map(async (a) => {
+    try {
+      const r = await cap.nativePromise('AppLauncher', 'canOpenUrl', { url: a.pkg });
+      appInstalled.set(a.pkg, !!r?.value);
+    } catch { appInstalled.delete(a.pkg); }
+  }));
+  try {
+    const want = apps.filter((a) => appInstalled.get(a.pkg) && !appIcons.has(a.pkg)).map((a) => a.pkg);
+    if (want.length) {
+      const r = await cap.nativePromise('AppIcons', 'icons', { packages: want });
+      for (const [pkg, icon] of Object.entries(r?.icons || {})) appIcons.set(pkg, icon);
+    }
+  } catch { /* icônes indisponibles : pictogrammes */ }
+}
+
+async function launchApp(a) {
+  haptic();
+  if (IS_NATIVE) {
+    const cap = window.Capacitor;
+    try {
+      if (appInstalled.get(a.pkg) !== false) {
+        const r = await cap.nativePromise('AppLauncher', 'openUrl', { url: a.pkg });
+        if (r?.completed) return;
+      }
+      const r = await cap.nativePromise('AppLauncher', 'openUrl', { url: `market://details?id=${a.pkg}` });
+      if (!r?.completed) await cap.nativePromise('AppLauncher', 'openUrl', { url: playUrl(a.pkg) });
+    } catch { toast('Impossible d’ouvrir cette appli'); }
+    return;
+  }
+  // Navigateur Android : l'appli si elle est installée, sinon le Play Store ; ailleurs, la page du Play Store.
+  if (/Android/i.test(navigator.userAgent)) {
+    location.href = `intent://#Intent;package=${a.pkg};S.browser_fallback_url=${encodeURIComponent(playUrl(a.pkg))};end`;
+  } else {
+    window.open(playUrl(a.pkg), '_blank', 'noopener');
+  }
+}
+
+// Icône : officielle (lue sur le téléphone) si l'appli est installée ; générique grisée sinon ;
+// pictogramme de couleur dans la version web, qui ne peut pas lire les icônes.
+function appIconEl(a) {
+  const icon = document.createElement('span');
+  icon.className = 'app-icon';
+  const official = appIcons.get(a.pkg);
+  if (official) {
+    icon.classList.add('official');
+    const img = document.createElement('img');
+    img.src = official;
+    img.alt = '';
+    icon.append(img);
+  } else if (appInstalled.get(a.pkg) === false) {
+    icon.classList.add('generic');
+    icon.textContent = a.name.trim().charAt(0).toUpperCase();
+  } else {
+    icon.style.setProperty('--app', a.color);
+    icon.textContent = a.emoji;
+  }
+  return icon;
+}
+
+async function renderApps() {
+  const grid = $('apps-grid');
+  const draw = () => {
+    const list = shownApps();
+    grid.replaceChildren(...list.map((a) => {
+      const missing = appInstalled.get(a.pkg) === false;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `app-tile${missing ? ' missing' : ''}`;
+      b.setAttribute('aria-label', missing ? `${a.name} : application non installée, l’installer depuis le Play Store` : `Ouvrir ${a.name}`);
+      const name = document.createElement('span');
+      name.className = 'app-name';
+      name.textContent = a.name;
+      const desc = document.createElement('span');
+      desc.className = missing ? 'app-get' : 'app-desc';
+      desc.textContent = missing ? 'Non installée' : a.desc;
+      // ⓘ : à quoi sert l'appli (sans l'ouvrir)
+      const info = document.createElement('span');
+      info.className = 'app-info info-i';
+      info.textContent = 'i';
+      info.setAttribute('role', 'button');
+      info.setAttribute('aria-label', `À quoi sert ${a.name}`);
+      info.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showInfo(a.name, [a.use[0].toUpperCase() + a.use.slice(1) + '.', missing ? 'Application non installée : touchez la vignette pour l’installer depuis le Play Store.' : 'Touchez la vignette pour l’ouvrir.']);
+      });
+      b.append(appIconEl(a), name, desc, info);
+      b.addEventListener('click', () => launchApp(a));
+      return b;
+    }));
+    $('apps-note').textContent = !list.length
+      ? 'Aucune appli choisie : cochez-en dans les Réglages.'
+      : IS_NATIVE
+        ? 'Grisée, application non installée : touchez-la pour l’installer depuis le Play Store. Choix des applis dans les Réglages.'
+        : 'Touchez une appli pour l’ouvrir, ou l’installer depuis le Play Store. Choix des applis dans les Réglages.';
+  };
+  draw();
+  await checkApps(shownApps());
+  draw();
+}
+
+// Réglages : applis cochées dans l'ordre d'affichage (▲ ▼), puis celles de la liste non cochées.
+function renderAppsChoice() {
+  const box = $('apps-choice');
+  const sel = state.settings.apps;
+  const save = () => { store.set('settings', state.settings); renderAppsChoice(); haptic(); };
+  const rows = [...sel.map(appById).filter(Boolean), ...APPS.filter((a) => !sel.includes(a.id))];
+  box.replaceChildren(...rows.map((a) => {
+    const on = sel.includes(a.id);
+    const i = sel.indexOf(a.id);
+    const li = document.createElement('li');
+    li.className = on ? 'on' : '';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = on;
+    check.setAttribute('aria-label', `Afficher ${a.name}`);
+    check.addEventListener('change', () => {
+      state.settings.apps = on ? sel.filter((id) => id !== a.id) : [...sel, a.id];
+      save();
+    });
+    const icon = document.createElement('span');
+    icon.className = 'pick-icon';
+    const official = appIcons.get(a.pkg);
+    if (official) { const img = document.createElement('img'); img.src = official; img.alt = ''; icon.append(img); } else icon.textContent = a.emoji;
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = a.name;
+    li.append(check, icon, name);
+    if (on) {
+      const move = (d, label, text) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = text;
+        b.disabled = !sel[i + d];
+        b.setAttribute('aria-label', `${label} : ${a.name}`);
+        b.addEventListener('click', () => { [sel[i], sel[i + d]] = [sel[i + d], sel[i]]; save(); });
+        return b;
+      };
+      li.append(move(-1, 'Monter', '▲'), move(1, 'Descendre', '▼'));
+    }
+    if (a.custom) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '×';
+      del.setAttribute('aria-label', `Retirer ${a.name}`);
+      del.addEventListener('click', () => {
+        state.settings.customApps = state.settings.customApps.filter((c) => c.pkg !== a.pkg);
+        state.settings.apps = sel.filter((id) => id !== a.id);
+        save();
+        toast(`${a.name} retirée des applis utiles`);
+      });
+      li.append(del);
+    }
+    // Case à cocher sur toute la ligne (hors boutons)
+    li.addEventListener('click', (e) => { if (!e.target.closest('button, input')) check.click(); });
+    return li;
+  }));
+  $('app-add').hidden = !IS_NATIVE;
+}
+
+// « Ajouter une appli » : liste des applis du téléphone, avec leur icône et une recherche.
+let phoneApps = null;
+async function openAppPicker() {
+  const dlg = $('app-pick-dialog');
+  const list = $('app-pick-list');
+  const search = $('app-pick-search');
+  search.value = '';
+  list.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Chargement des applis…' }));
+  dlg.showModal();
+  try {
+    phoneApps ||= (await window.Capacitor.nativePromise('AppIcons', 'installed', {}))?.apps || [];
+  } catch { phoneApps = null; list.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Liste des applis indisponible.' })); return; }
+  for (const a of phoneApps) if (a.icon) appIcons.set(a.pkg, a.icon);
+  const draw = () => {
+    const q = normCity(search.value);
+    const taken = new Set([...APPS.map((a) => a.pkg), ...state.settings.customApps.map((c) => c.pkg)]);
+    const items = phoneApps.filter((a) => !taken.has(a.pkg) && (!q || normCity(a.name).includes(q)));
+    list.replaceChildren(...items.map((a) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'app-pick';
+      const img = document.createElement('img');
+      img.src = a.icon;
+      img.alt = '';
+      b.append(img, a.name);
+      b.addEventListener('click', () => {
+        state.settings.customApps.push({ pkg: a.pkg, name: a.name });
+        state.settings.apps.push(`c:${a.pkg}`);
+        store.set('settings', state.settings);
+        renderAppsChoice();
+        haptic('success');
+        toast(`${a.name} ajoutée aux applis utiles`);
+        draw();
+      });
+      return b;
+    }));
+    if (!items.length) list.append(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Aucune appli trouvée.' }));
+  };
+  search.oninput = draw;
+  draw();
+}
 
 let toastTimer = null;
 function toast(msg, actionLabel, action) {
@@ -1424,23 +2089,33 @@ async function loadCustomWallpapers() {
   customWps = customWps.filter((c) => customUrls.has(c.id));
 }
 
-// Recadre la photo au format de l'écran (9:16), la compresse et mesure sa luminosité.
-async function processPhoto(file) {
+const canvasBlob = (c, q) => new Promise((r) => c.toBlob(r, 'image/webp', q));
+
+// Original gardé (2560 px maximum) pour pouvoir recadrer la photo plus tard.
+async function photoSource(file) {
   const bmp = await createImageBitmap(file);
-  const target = 9 / 16;
-  let sw = bmp.width, sh = bmp.height;
-  if (sw / sh > target) sw = Math.round(sh * target); else sh = Math.round(sw / target);
-  const sx = Math.round((bmp.width - sw) / 2), sy = Math.round((bmp.height - sh) / 2);
-  const draw = (w, h) => {
+  const k = Math.min(1, 2560 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close?.();
+  return canvasBlob(c, 0.86);
+}
+
+// Découpe la zone choisie au format de l'écran, la compresse et mesure sa luminosité.
+async function processPhoto(src, { sx, sy, sw, sh }) {
+  const bmp = await createImageBitmap(src);
+  const ratio = innerHeight / innerWidth;
+  const draw = (w) => {
     const c = document.createElement('canvas');
-    c.width = w; c.height = h;
-    c.getContext('2d').drawImage(bmp, sx, sy, sw, sh, 0, 0, w, h);
+    c.width = w; c.height = Math.round(w * ratio);
+    c.getContext('2d').drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
     return c;
   };
-  const full = draw(1080, 1920);
-  const blob = await new Promise((r) => full.toBlob(r, 'image/webp', 0.78));
-  const thumb = draw(180, 320).toDataURL('image/webp', 0.7);
-  const px = draw(18, 32).getContext('2d').getImageData(0, 0, 18, 32).data;
+  const blob = await canvasBlob(draw(1080), 0.78);
+  const thumb = draw(180).toDataURL('image/webp', 0.7);
+  const small = draw(18);
+  const px = small.getContext('2d').getImageData(0, 0, small.width, small.height).data;
   let lum = 0;
   for (let i = 0; i < px.length; i += 4) lum += 0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2];
   lum /= px.length / 4;
@@ -1448,12 +2123,103 @@ async function processPhoto(file) {
   return { blob, thumb, tone: lum < 140 ? 'dark' : 'light' };
 }
 
+// --- Recadrage : la photo couvre tout l'écran, on la déplace et on zoome ----------
+
+const crop = { iw: 0, ih: 0, s: 1, min: 1, tx: 0, ty: 0, pts: new Map(), done: null };
+
+function cropClamp() {
+  const W = innerWidth, H = innerHeight;
+  crop.s = Math.min(crop.min * 4, Math.max(crop.min, crop.s));
+  crop.tx = Math.min(0, Math.max(W - crop.iw * crop.s, crop.tx));
+  crop.ty = Math.min(0, Math.max(H - crop.ih * crop.s, crop.ty));
+  $('crop-img').style.transform = `translate(${crop.tx}px, ${crop.ty}px) scale(${crop.s})`;
+  $('crop-zoom').value = Math.round((crop.s / crop.min) * 100);
+}
+
+// Zoom autour d'un point de l'écran (centre du pincement, curseur…).
+function cropZoom(s, cx = innerWidth / 2, cy = innerHeight / 2) {
+  const k = Math.min(crop.min * 4, Math.max(crop.min, s)) / crop.s;
+  crop.tx = cx - (cx - crop.tx) * k;
+  crop.ty = cy - (cy - crop.ty) * k;
+  crop.s *= k;
+  cropClamp();
+}
+
+function cropReset() {
+  crop.s = crop.min;
+  crop.tx = (innerWidth - crop.iw * crop.s) / 2;
+  crop.ty = (innerHeight - crop.ih * crop.s) / 2;
+  cropClamp();
+}
+
+function cropFinish(rect) {
+  const done = crop.done;
+  crop.done = null;
+  done?.(rect);
+}
+
+// Ouvre l'écran de recadrage ; renvoie la zone choisie (pixels de la source) ou null si annulé.
+async function openCrop(src) {
+  const img = $('crop-img');
+  const url = URL.createObjectURL(src);
+  img.src = url;
+  try { await img.decode(); } catch { URL.revokeObjectURL(url); return null; }
+  crop.iw = img.naturalWidth; crop.ih = img.naturalHeight;
+  img.style.width = `${crop.iw}px`; img.style.height = `${crop.ih}px`;
+  crop.min = Math.max(innerWidth / crop.iw, innerHeight / crop.ih);
+  crop.pts.clear();
+  cropReset();
+  openView('crop-view');
+  const rect = await new Promise((resolve) => { crop.done = resolve; });
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return rect;
+}
+
+function initCrop() {
+  const stage = $('crop-stage');
+  let last = null; // dernier état des doigts : { x, y, d } (centre et écart)
+  const gesture = () => {
+    const p = [...crop.pts.values()];
+    if (p.length === 1) return { x: p[0].x, y: p[0].y, d: 0 };
+    return { x: (p[0].x + p[1].x) / 2, y: (p[0].y + p[1].y) / 2, d: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) };
+  };
+  stage.addEventListener('pointerdown', (e) => {
+    try { stage.setPointerCapture(e.pointerId); } catch { /* pointeur déjà relâché */ }
+    crop.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    last = gesture();
+  });
+  stage.addEventListener('pointermove', (e) => {
+    if (!crop.pts.has(e.pointerId)) return;
+    crop.pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture();
+    if (last && g.d && last.d) cropZoom(crop.s * (g.d / last.d), g.x, g.y);
+    if (last) { crop.tx += g.x - last.x; crop.ty += g.y - last.y; cropClamp(); }
+    last = g;
+  });
+  const up = (e) => { crop.pts.delete(e.pointerId); last = crop.pts.size ? gesture() : null; };
+  stage.addEventListener('pointerup', up);
+  stage.addEventListener('pointercancel', up);
+  stage.addEventListener('wheel', (e) => { e.preventDefault(); cropZoom(crop.s * (e.deltaY < 0 ? 1.1 : 1 / 1.1), e.clientX, e.clientY); }, { passive: false });
+  stage.addEventListener('dblclick', cropReset);
+  $('crop-zoom').addEventListener('input', () => cropZoom(crop.min * Number($('crop-zoom').value) / 100));
+  $('crop-reset').addEventListener('click', () => { cropReset(); haptic(); });
+  $('crop-cancel').addEventListener('click', () => history.back());
+  $('crop-ok').addEventListener('click', () => {
+    cropFinish({ sx: -crop.tx / crop.s, sy: -crop.ty / crop.s, sw: innerWidth / crop.s, sh: innerHeight / crop.s });
+    history.back();
+  });
+}
+
 async function addCustomWallpaper(file) {
   if (customWps.length >= CUSTOM_MAX) { toast(`${CUSTOM_MAX} photos maximum : supprimez-en une d'abord`); return; }
-  toast('Préparation de la photo…');
   try {
-    const { blob, thumb, tone } = await processPhoto(file);
+    const src = await photoSource(file);
+    const rect = await openCrop(src);
+    if (!rect) return;
+    toast('Préparation de la photo…');
+    const { blob, thumb, tone } = await processPhoto(src, rect);
     const id = `custom-${uid()}`;
+    await wpDb.put(`${id}-src`, src);
     await wpDb.put(id, blob);
     customUrls.set(id, URL.createObjectURL(blob));
     customWps.push({ id, label: `Ma photo ${customWps.length + 1}`, tone, thumb });
@@ -1469,10 +2235,36 @@ async function addCustomWallpaper(file) {
   }
 }
 
+// Recadre une photo déjà ajoutée (à partir de l'original, ou de l'image pour les photos plus anciennes).
+async function recropCustomWallpaper(id) {
+  const c = customWps.find((x) => x.id === id);
+  if (!c) return;
+  try {
+    const src = (await wpDb.get(`${id}-src`)) || (await wpDb.get(id));
+    if (!src) throw new Error('photo introuvable');
+    const rect = await openCrop(src);
+    if (!rect) return;
+    const { blob, thumb, tone } = await processPhoto(src, rect);
+    await wpDb.put(id, blob);
+    const old = customUrls.get(id);
+    customUrls.set(id, URL.createObjectURL(blob));
+    Object.assign(c, { thumb, tone });
+    store.set('customWallpapers', customWps);
+    if (wpCurrent === id) wpCurrent = null; // force l'affichage de la nouvelle image
+    applyWallpaper();
+    if (old) setTimeout(() => URL.revokeObjectURL(old), 2000);
+    haptic('success');
+    toast('Photo recadrée');
+  } catch {
+    haptic('warning');
+    toast('Impossible de recadrer cette photo');
+  }
+}
+
 async function removeCustomWallpaper(id) {
   customWps = customWps.filter((c) => c.id !== id);
   store.set('customWallpapers', customWps);
-  try { await wpDb.del(id); } catch { /* ignore */ }
+  try { await wpDb.del(id); await wpDb.del(`${id}-src`); } catch { /* ignore */ }
   const url = customUrls.get(id);
   customUrls.delete(id);
   if (state.settings.wallpaper === id) { state.settings.wallpaper = 'random'; store.set('settings', state.settings); }
@@ -1494,11 +2286,64 @@ function applyTheme() {
   document.documentElement.classList.toggle('theme-light', tone === 'light');
 }
 
-// Givré : opacité des cartes (55 % à 85 %) et flou (6 à 28 px).
+// Givré : de 0 (cartes transparentes, sans flou) à 100 (opacité 85 %, flou 28 px), en « dur » secondes.
+function setFrostLevel(v, dur = 0) {
+  const root = document.documentElement.style;
+  root.transition = dur ? `--glass-a ${dur}s ease-in-out, --blur ${dur}s ease-in-out` : 'none';
+  root.setProperty('--glass-a', (0.85 * v / 100).toFixed(3));
+  root.setProperty('--blur', `${(28 * v / 100).toFixed(1)}px`);
+}
+
+// Givré animé : toutes les « every » s, de « from » à « to » en « dur » s, puis retour à « from ».
+let frostTimer = null;
+let frostBack = null;
 function applyFrost() {
-  const f = state.settings.frost / 100;
-  document.documentElement.style.setProperty('--glass-a', (0.55 + 0.3 * f).toFixed(2));
-  document.documentElement.style.setProperty('--blur', `${Math.round(6 + 22 * f)}px`);
+  clearInterval(frostTimer);
+  clearTimeout(frostBack);
+  const a = state.settings.frostAnim;
+  if (!a.on) { setFrostLevel(state.settings.frost); return; }
+  setFrostLevel(a.from);
+  const cycle = () => {
+    setFrostLevel(a.to, a.dur);
+    frostBack = setTimeout(() => setFrostLevel(a.from, a.dur), a.dur * 1000);
+  };
+  frostBack = setTimeout(cycle, 600); // premier passage tout de suite, pour voir l'effet
+  frostTimer = setInterval(cycle, Math.max(a.every, 2 * a.dur + 1) * 1000);
+}
+
+function renderFrostAnim() {
+  const a = state.settings.frostAnim;
+  $('opt-frost-anim').checked = a.on;
+  $('frost-anim-box').hidden = !a.on;
+  $('frost-fixed').hidden = a.on;
+  for (const k of ['every', 'from', 'to', 'dur']) $(`fa-${k}`).value = a[k];
+  $('fa-every-v').textContent = `${a.every} s`;
+  $('fa-from-v').textContent = a.from;
+  $('fa-to-v').textContent = a.to;
+  $('fa-dur-v').textContent = `${a.dur} s`;
+  const every = Math.max(a.every, 2 * a.dur + 1);
+  $('fa-note').textContent = `Toutes les ${every} s, le givré passe de ${a.from} à ${a.to} en ${a.dur} s, puis revient à ${a.from} en ${a.dur} s.`
+    + (every > a.every ? ' (Délai allongé pour laisser le temps à l’aller-retour.)' : '');
+}
+
+function initFrostAnim() {
+  renderFrostAnim();
+  $('opt-frost-anim').addEventListener('change', () => {
+    state.settings.frostAnim.on = $('opt-frost-anim').checked;
+    store.set('settings', state.settings);
+    renderFrostAnim();
+    applyFrost();
+    haptic();
+  });
+  for (const k of ['every', 'from', 'to', 'dur']) {
+    const el = $(`fa-${k}`);
+    el.addEventListener('input', () => {
+      state.settings.frostAnim[k] = Number(el.value);
+      renderFrostAnim();
+      if (k === 'from' || k === 'to') setFrostLevel(state.settings.frostAnim[k]); // aperçu du niveau réglé
+    });
+    el.addEventListener('change', () => { store.set('settings', state.settings); applyFrost(); haptic(); });
+  }
 }
 
 function showWallpaper(id) {
@@ -1578,7 +2423,13 @@ function renderWallpaperSettings() {
       del.setAttribute('role', 'button');
       del.setAttribute('aria-label', `Retirer ${t.label}`);
       del.addEventListener('click', (e) => { e.stopPropagation(); removeCustomWallpaper(t.id); });
-      b.append(del);
+      const cut = document.createElement('span');
+      cut.className = 'wp-crop';
+      cut.append($('crop-icon-tpl').firstElementChild.cloneNode(true));
+      cut.setAttribute('role', 'button');
+      cut.setAttribute('aria-label', `Recadrer ${t.label}`);
+      cut.addEventListener('click', (e) => { e.stopPropagation(); recropCustomWallpaper(t.id); });
+      b.append(cut, del);
     }
     b.addEventListener('click', () => {
       if (t.id === 'add') { $('wp-file').click(); return; }
@@ -1785,6 +2636,7 @@ const VOICE_CATEGORIES = [
   { id: 'clothes', words: ['vêtement', 'vetement', 'habit', 'chaussure', 'basket', 'jean', 'pull', 'veste', 'clothes', 'clothing', 'shoe', 'sneaker', 'apparel', 'shirt'] },
   { id: 'food', words: ['resto', 'restaurant', 'repas', 'dîner', 'diner', 'déjeuner', 'dejeuner', 'brunch', 'bar', 'café', 'meal', 'dinner', 'lunch', 'breakfast'] },
   { id: 'grocery', words: ['épicerie', 'epicerie', 'supermarché', 'supermarche', 'pharmacie', 'médicament', 'medicament', 'courses', 'grocery', 'groceries', 'supermarket', 'pharmacy', 'drugstore', 'medicine'] },
+  { id: 'transport', words: ['taxi', 'uber', 'lyft', 'métro', 'metro', 'subway', 'bus', 'ferry', 'transport', 'course', 'cab'] },
   { id: 'shop', words: ['shopping', 'souvenir', 'boutique', 'magasin', 'cadeau', 'store', 'shop', 'gift'] },
   { id: 'other', words: ['autre', 'other', 'divers', 'misc'] },
 ];
@@ -1825,47 +2677,52 @@ function applyVoice(matches) {
   toast(`Pas compris${matches?.[0] ? ` : « ${matches[0]} »` : ''}. Réessayez.`);
 }
 
-async function startVoice() {
-  if (keypadOpen()) history.back();
-  const lang = state.settings.voiceLang;
-  const btn = $('voice-btn');
+// Écoute une phrase (micro natif dans l'APK, Web Speech sinon) ; renvoie les transcriptions possibles,
+// ou null si l'écoute n'a pas pu se faire (message déjà affiché).
+async function listen({ btn, prompt, lang = state.settings.voiceLang }) {
   try {
     if (IS_NATIVE) {
       const cap = window.Capacitor;
       const perm = await cap.nativePromise('SpeechRecognition', 'requestPermissions', { permissions: ['speechRecognition'] });
       if (perm?.speechRecognition && perm.speechRecognition !== 'granted') {
         toast('Autorisez le micro pour la saisie vocale');
-        return;
+        return null;
       }
       btn.classList.add('listening');
-      const res = await cap.nativePromise('SpeechRecognition', 'start', {
-        language: lang, maxResults: 5, popup: true, partialResults: false,
-        prompt: lang === 'fr-FR' ? 'Dites le prix et la catégorie' : 'Say the price and category',
-      });
-      applyVoice(res?.matches);
-      return;
+      const res = await cap.nativePromise('SpeechRecognition', 'start', { language: lang, maxResults: 5, popup: true, partialResults: false, prompt });
+      return res?.matches || [];
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       toast('Saisie vocale indisponible sur ce navigateur');
-      return;
+      return null;
     }
-    const rec = new SR();
-    rec.lang = lang;
-    rec.maxAlternatives = 5;
-    rec.interimResults = false;
-    btn.classList.add('listening');
-    toast(lang === 'fr-FR' ? 'Parlez : prix et catégorie…' : 'Speak: price and category…');
-    rec.onresult = (e) => applyVoice(Array.from(e.results[0]).map((a) => a.transcript));
-    rec.onerror = (e) => { if (e.error !== 'aborted') toast(e.error === 'not-allowed' ? 'Autorisez le micro pour la saisie vocale' : 'Pas compris, réessayez'); };
-    rec.onend = () => btn.classList.remove('listening');
-    rec.start();
-    return;
+    return await new Promise((resolve) => {
+      const rec = new SR();
+      rec.lang = lang;
+      rec.maxAlternatives = 5;
+      rec.interimResults = false;
+      btn.classList.add('listening');
+      toast(`${prompt}…`);
+      let matches = null;
+      rec.onresult = (e) => { matches = Array.from(e.results[0]).map((a) => a.transcript); };
+      rec.onerror = (e) => { if (e.error !== 'aborted') toast(e.error === 'not-allowed' ? 'Autorisez le micro pour la saisie vocale' : 'Pas compris, réessayez'); };
+      rec.onend = () => resolve(matches);
+      rec.start();
+    });
   } catch (e) {
     if (!/cancel|^0$/i.test(String(e?.message ?? e))) toast('Pas compris, réessayez');
+    return null;
   } finally {
-    if (IS_NATIVE) btn.classList.remove('listening');
+    btn.classList.remove('listening');
   }
+}
+
+async function startVoice() {
+  if (keypadOpen()) history.back();
+  const fr = state.settings.voiceLang === 'fr-FR';
+  const matches = await listen({ btn: $('voice-btn'), prompt: fr ? 'Dites le prix et la catégorie' : 'Say the price and category' });
+  if (matches) applyVoice(matches);
 }
 
 // --- Démarrage ------------------------------------------------------------
@@ -1888,6 +2745,12 @@ function init() {
   state.fx = store.get('fx');
   state.taxes = store.get('taxes') || DEFAULT_TAXES;
   initSettings();
+  initClockSetting();
+  initCrop();
+  const cropIcon = $('crop-icon-tpl').firstElementChild.cloneNode(true);
+  cropIcon.classList.add('inline-icon');
+  $('wp-note').replaceChildren('« Ma photo » : choisissez jusqu’à 5 photos de votre téléphone, puis cadrez-les ; elles restent sur l’appareil. Touchez ', cropIcon, ' sur une photo pour la recadrer.');
+  startClocks();
   loadCustomWallpapers().finally(applyWallpaper);
   $('wp-file').addEventListener('change', () => {
     const f = $('wp-file').files[0];
@@ -1909,6 +2772,11 @@ function init() {
   $('scan-btn').addEventListener('click', openScanner);
   $('voice-btn').addEventListener('click', startVoice);
   $('cat-info').addEventListener('click', showCatInfo);
+  $('rate-refresh').addEventListener('click', refreshRate);
+  // L'appli peut rester ouverte en arrière-plan plusieurs jours : nouveau cours au retour.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - (state.fx?.checkedAt || 0) > RATE_REFRESH_MS) loadRate();
+  });
   setDetail(store.get('detailOpen') === true);
   $('detail-btn').addEventListener('click', () => { setDetail($('breakdown').hidden); haptic(); });
   $('add-to-btn').addEventListener('click', addToSaved);
@@ -1922,7 +2790,31 @@ function init() {
   $('add-btn').addEventListener('click', (e) => addToCart(e.currentTarget));
   $('cart-open').addEventListener('click', () => openView('cart-view'));
   $('saved-open').addEventListener('click', () => openView('saved-view'));
-  $('settings-open').addEventListener('click', () => openView('settings-view'));
+  // Menu de l'écran principal (à la place de l'ancien bouton Réglages)
+  $('menu-open').addEventListener('click', () => {
+    if (!$('main-menu').hidden) { history.back(); return; }
+    openView('main-menu', false);
+    $('menu-open').setAttribute('aria-expanded', 'true');
+    haptic();
+  });
+  document.addEventListener('click', (e) => {
+    if (!$('main-menu').hidden && openViews.at(-1)?.id === 'main-menu' && !e.target.closest('#main-menu, #menu-open')) history.back();
+  });
+  $('menu-cart').addEventListener('click', () => openView('cart-view'));
+  $('menu-saved').addEventListener('click', () => openView('saved-view'));
+  $('settings-open').addEventListener('click', () => {
+    openView('settings-view');
+    checkApps([...APPS, ...state.settings.customApps.map(customApp)]).then(renderAppsChoice); // icônes du téléphone
+  });
+  $('apps-open').addEventListener('click', () => { openView('apps-view'); renderApps(); });
+  $('app-add').addEventListener('click', openAppPicker);
+  initFrostAnim();
+  $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
+  // Retour dans l'appli : une appli a peut-être été installée entre-temps.
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('apps-view').hidden) renderApps(); });
+  initSwipe();
+  renderScreenOrder();
+  renderAppsChoice();
   $('cart-clear').addEventListener('click', clearCart);
   $('cart-save').addEventListener('click', askCartName);
   $('cart-share').addEventListener('click', () => shareCart(cart));

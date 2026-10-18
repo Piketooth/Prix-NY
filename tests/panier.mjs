@@ -66,7 +66,7 @@ await key('ok'); await p.waitForTimeout(200);
 await p.click('#name-dialog button[value=ok]'); await p.waitForTimeout(200);
 await p.goBack(); await p.waitForTimeout(250);
 // Réglages : galerie
-await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
 const tiles = await p.$$eval('.wp-tile', (l) => l.map((t) => t.textContent));
 ok(`galerie: ${tiles.length} vignettes`, tiles.length === 11);
 await p.click('.wp-tile:has-text("Aléatoire")');
