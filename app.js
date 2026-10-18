@@ -246,7 +246,7 @@ const CAT_INFO = {
       'Taxi jaune : le compteur inclut déjà les suppléments (MTA, embouteillage au sud de la 60ᵉ rue…). Pourboire d’usage : 15 à 20 %, proposé sur l’écran de paiement.',
       'Uber, Lyft : le prix de l’appli comprend la sales tax, le Black Car Fund et les suppléments. Pourboire facultatif de 15 à 20 %, donné dans l’appli.',
       'Ferry, Citi Bike : prix fixe, sans pourboire.',
-      'Le pourboire de 20 % est proposé par défaut, comme pour un taxi : choisissez « Aucun » pour le métro, le bus ou le ferry. Indiquez le nombre de passagers (👥) pour partager la course.',
+      'Le pourboire de 20 % est proposé par défaut, comme pour un taxi : choisissez « Aucun » pour le métro, le bus ou le ferry. Réglez « Personnes » pour partager la course.',
     ],
   },
   grocery: {
@@ -459,7 +459,16 @@ function initClockSetting() {
   const input = $('set-city');
   const box = $('city-suggest');
   input.value = state.settings.clock.label;
-  $('city-note').textContent = 'Tapez ou dites une ville (Paris, Montréal, Genève, Tokyo…), ou touchez 📍 pour celle où vous êtes : son heure s’affiche sous le titre, à côté de celle de New York.';
+  // Aide avec les mêmes icônes que les boutons micro et position.
+  const icon = (id) => {
+    const i = $(id).querySelector('svg').cloneNode(true);
+    i.classList.add('inline-icon');
+    return i;
+  };
+  $('city-note').replaceChildren(
+    'Tapez une ville (Paris, Montréal, Genève, Tokyo…), dites-la avec ', icon('city-voice'),
+    ' ou touchez ', icon('city-locate'), ' pour celle où vous êtes : son heure s’affiche sous le titre, à côté de celle de New York.',
+  );
   // Champ vidé au toucher (ville actuelle en indication) pour taper directement la nouvelle.
   input.addEventListener('focus', () => { input.placeholder = state.settings.clock.label; input.value = ''; });
   input.addEventListener('input', () => {
