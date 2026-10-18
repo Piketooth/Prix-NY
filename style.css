@@ -1339,6 +1339,10 @@ header.masthead { display: block; padding: 14px 0 8px; }
 }
 .mast-clocks span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .mast-clocks span:empty { display: none; }
+.city-row { display: flex; gap: 8px; align-items: center; }
+.city-row .field { flex: 1; min-width: 0; }
+.city-row .icon-btn { width: 46px; height: 46px; border-radius: 16px; }
+.icon-btn.busy { opacity: .6; pointer-events: none; }
 .city-suggest { margin-top: 8px; }
 .city-suggest:empty { display: none; }
 .city-suggest .chip { font-size: 16px; padding: 5px 12px; }

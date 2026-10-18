@@ -242,7 +242,11 @@
       </div>
       <div class="card glass setting">
         <label for="set-city" class="label">Deuxième horloge</label>
-        <input id="set-city" class="field" type="text" inputmode="none" data-kbd="plain" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Paris">
+        <div class="city-row">
+          <input id="set-city" class="field" type="text" inputmode="none" data-kbd="plain" maxlength="40" autocomplete="off" enterkeyhint="done" placeholder="Paris">
+          <button id="city-voice" class="icon-btn" type="button" aria-label="Dire la ville" title="Dire la ville"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+          <button id="city-locate" class="icon-btn" type="button" aria-label="Utiliser ma position" title="Utiliser ma position"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.1-7-11.5a7 7 0 0 1 14 0C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg></button>
+        </div>
         <div id="city-suggest" class="chips city-suggest"></div>
         <p id="city-note" class="note"></p>
       </div>

@@ -383,7 +383,7 @@ function renderClocks() {
   const now = new Date();
   const time = (tz) => now.toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const { label, tz } = state.settings.clock;
-  $('clock-ny').textContent = `🗽 New York ${time(NY_TZ)}`;
+  $('clock-ny').textContent = `New York ${time(NY_TZ)}`;
   if (tz === NY_TZ) { $('clock-home').textContent = ''; return; }
   const diff = (tzOffset(tz, now) - tzOffset(NY_TZ, now)) / 60;
   const sign = diff >= 0 ? '+' : '−';
@@ -406,11 +406,60 @@ function setClockCity(c) {
   renderClocks();
 }
 
+// Ville dictée : la première transcription qui correspond à une ville connue.
+async function cityByVoice() {
+  const matches = await listen({ btn: $('city-voice'), prompt: 'Dites une ville', lang: 'fr-FR' });
+  if (!matches) return;
+  for (const m of matches) {
+    const q = normCity(m);
+    const c = cities().find((x) => x.key === q) || findCities(m, 1)[0];
+    if (c) { setClockCity(c); haptic('success'); return; }
+  }
+  haptic('warning');
+  $('city-note').textContent = matches.length ? `« ${matches[0]} » introuvable : essayez une grande ville du même fuseau horaire.` : 'Pas compris, réessayez.';
+}
+
+// Ville de l'endroit où l'on se trouve : fuseau du téléphone (réglé par le réseau), nom de la ville
+// par géolocalisation (BigDataCloud, sans clé), ou à défaut celui du fuseau.
+async function cityByLocation() {
+  const btn = $('city-locate');
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const fromTz = cities().find((c) => c.tz === tz && CITY_ALIASES.some(([, z]) => z === tz)) || cities().find((c) => c.tz === tz);
+  btn.classList.add('busy');
+  $('city-note').textContent = 'Localisation…';
+  try {
+    const pos = await new Promise((resolve, reject) => {
+      if (!navigator.geolocation) { reject(new Error('indisponible')); return; }
+      navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 15000, maximumAge: 3600000 });
+    });
+    const { latitude, longitude } = pos.coords;
+    const geo = await fetchJson(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${latitude}&longitude=${longitude}&localityLanguage=fr`);
+    const name = geo.city || geo.locality;
+    if (!name) throw new Error('ville inconnue');
+    const known = cities().find((c) => c.key === normCity(name));
+    setClockCity({ label: name, tz: known?.tz || tz });
+    haptic('success');
+  } catch (e) {
+    if (e?.code === 1) { // PERMISSION_DENIED
+      $('city-note').textContent = 'Localisation refusée : autorisez-la pour l’appli dans les réglages du téléphone, ou tapez la ville.';
+      haptic('warning');
+    } else if (fromTz) {
+      setClockCity(fromTz); // hors ligne ou sans GPS : la ville du fuseau du téléphone
+    } else {
+      $('city-note').textContent = 'Position introuvable : tapez la ville.';
+    }
+  } finally {
+    btn.classList.remove('busy');
+  }
+}
+
 function initClockSetting() {
+  $('city-voice').addEventListener('click', cityByVoice);
+  $('city-locate').addEventListener('click', cityByLocation);
   const input = $('set-city');
   const box = $('city-suggest');
   input.value = state.settings.clock.label;
-  $('city-note').textContent = 'Tapez une ville (Paris, Montréal, Genève, Tokyo…) : son heure s’affiche sous le titre, à côté de celle de New York.';
+  $('city-note').textContent = 'Tapez ou dites une ville (Paris, Montréal, Genève, Tokyo…), ou touchez 📍 pour celle où vous êtes : son heure s’affiche sous le titre, à côté de celle de New York.';
   // Champ vidé au toucher (ville actuelle en indication) pour taper directement la nouvelle.
   input.addEventListener('focus', () => { input.placeholder = state.settings.clock.label; input.value = ''; });
   input.addEventListener('input', () => {
@@ -2009,47 +2058,52 @@ function applyVoice(matches) {
   toast(`Pas compris${matches?.[0] ? ` : « ${matches[0]} »` : ''}. Réessayez.`);
 }
 
-async function startVoice() {
-  if (keypadOpen()) history.back();
-  const lang = state.settings.voiceLang;
-  const btn = $('voice-btn');
+// Écoute une phrase (micro natif dans l'APK, Web Speech sinon) ; renvoie les transcriptions possibles,
+// ou null si l'écoute n'a pas pu se faire (message déjà affiché).
+async function listen({ btn, prompt, lang = state.settings.voiceLang }) {
   try {
     if (IS_NATIVE) {
       const cap = window.Capacitor;
       const perm = await cap.nativePromise('SpeechRecognition', 'requestPermissions', { permissions: ['speechRecognition'] });
       if (perm?.speechRecognition && perm.speechRecognition !== 'granted') {
         toast('Autorisez le micro pour la saisie vocale');
-        return;
+        return null;
       }
       btn.classList.add('listening');
-      const res = await cap.nativePromise('SpeechRecognition', 'start', {
-        language: lang, maxResults: 5, popup: true, partialResults: false,
-        prompt: lang === 'fr-FR' ? 'Dites le prix et la catégorie' : 'Say the price and category',
-      });
-      applyVoice(res?.matches);
-      return;
+      const res = await cap.nativePromise('SpeechRecognition', 'start', { language: lang, maxResults: 5, popup: true, partialResults: false, prompt });
+      return res?.matches || [];
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       toast('Saisie vocale indisponible sur ce navigateur');
-      return;
+      return null;
     }
-    const rec = new SR();
-    rec.lang = lang;
-    rec.maxAlternatives = 5;
-    rec.interimResults = false;
-    btn.classList.add('listening');
-    toast(lang === 'fr-FR' ? 'Parlez : prix et catégorie…' : 'Speak: price and category…');
-    rec.onresult = (e) => applyVoice(Array.from(e.results[0]).map((a) => a.transcript));
-    rec.onerror = (e) => { if (e.error !== 'aborted') toast(e.error === 'not-allowed' ? 'Autorisez le micro pour la saisie vocale' : 'Pas compris, réessayez'); };
-    rec.onend = () => btn.classList.remove('listening');
-    rec.start();
-    return;
+    return await new Promise((resolve) => {
+      const rec = new SR();
+      rec.lang = lang;
+      rec.maxAlternatives = 5;
+      rec.interimResults = false;
+      btn.classList.add('listening');
+      toast(`${prompt}…`);
+      let matches = null;
+      rec.onresult = (e) => { matches = Array.from(e.results[0]).map((a) => a.transcript); };
+      rec.onerror = (e) => { if (e.error !== 'aborted') toast(e.error === 'not-allowed' ? 'Autorisez le micro pour la saisie vocale' : 'Pas compris, réessayez'); };
+      rec.onend = () => resolve(matches);
+      rec.start();
+    });
   } catch (e) {
     if (!/cancel|^0$/i.test(String(e?.message ?? e))) toast('Pas compris, réessayez');
+    return null;
   } finally {
-    if (IS_NATIVE) btn.classList.remove('listening');
+    btn.classList.remove('listening');
   }
+}
+
+async function startVoice() {
+  if (keypadOpen()) history.back();
+  const fr = state.settings.voiceLang === 'fr-FR';
+  const matches = await listen({ btn: $('voice-btn'), prompt: fr ? 'Dites le prix et la catégorie' : 'Say the price and category' });
+  if (matches) applyVoice(matches);
 }
 
 // --- Démarrage ------------------------------------------------------------

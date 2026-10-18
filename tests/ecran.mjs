@@ -61,5 +61,21 @@ await p.click('#city-suggest .chip:has-text("Montréal")'); await p.waitForTimeo
 ok(`Montréal: ${await p.textContent('#clock-home')}`, (await p.textContent('#clock-home')).endsWith('même heure'));
 await p.reload(); await p.waitForTimeout(800);
 ok('ville mémorisée', (await p.textContent('#clock-home')).startsWith('Montréal'));
+ok(`pas d'icône devant New York: ${await p.textContent('#clock-ny')}`, /^New York \d\d:\d\d$/.test(await p.textContent('#clock-ny')));
+// Ville dictée (reconnaissance vocale simulée)
+await p.evaluate(() => {
+  window.SpeechRecognition = window.webkitSpeechRecognition = class {
+    start() { setTimeout(() => { this.onresult?.({ results: [[{ transcript: 'Genève' }]] }); this.onend?.(); }, 50); }
+  };
+});
+await p.click('#settings-open'); await p.waitForTimeout(300);
+await p.click('#city-voice'); await p.waitForTimeout(500);
+ok(`dictée: ${await p.textContent('#clock-home')}`, (await p.textContent('#clock-home')).startsWith('Genève') && (await p.inputValue('#set-city')) === 'Genève');
+// Géolocalisation : Lyon (position et nom de ville simulés)
+await ctx.grantPermissions(['geolocation']);
+await ctx.setGeolocation({ latitude: 45.76, longitude: 4.84 });
+await p.route('https://api.bigdatacloud.net/**', (r) => r.fulfill({ json: { city: 'Lyon', locality: 'Lyon', countryName: 'France' } }));
+await p.click('#city-locate'); await p.waitForTimeout(800);
+ok(`position: ${await p.textContent('#clock-home')}`, /^Lyon \d\d:\d\d · \+[56] h$/.test(await p.textContent('#clock-home')));
 ok(`${scheme} erreurs JS: ${errs}`, errs.length === 0);
 await b.close();
