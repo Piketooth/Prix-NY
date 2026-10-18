@@ -237,7 +237,7 @@ const CAT_INFO = {
     ],
   },
   transport: {
-    short: () => 'Taxes déjà incluses dans le prix',
+    short: () => 'Taxes incluses · métro sans pourboire',
     title: 'Transport',
     body: () => [
       'Aucune taxe n’est ajoutée : le prix affiché est le prix final.',
@@ -245,7 +245,7 @@ const CAT_INFO = {
       'Taxi jaune : le compteur inclut déjà les suppléments (MTA, embouteillage au sud de la 60ᵉ rue…). Pourboire d’usage : 15 à 20 %, proposé sur l’écran de paiement.',
       'Uber, Lyft : le prix de l’appli comprend la sales tax, le Black Car Fund et les suppléments. Pourboire facultatif de 15 à 20 %, donné dans l’appli.',
       'Ferry, Citi Bike : prix fixe, sans pourboire.',
-      'Choisissez le pourboire au besoin et le nombre de passagers (👥) pour partager la course.',
+      'Le pourboire de 20 % est proposé par défaut, comme pour un taxi : choisissez « Aucun » pour le métro, le bus ou le ferry. Indiquez le nombre de passagers (👥) pour partager la course.',
     ],
   },
   grocery: {
@@ -282,9 +282,8 @@ function setCategory(id) {
   const was = state.category;
   if (id === was) return;
   state.category = id;
-  // Au resto, le pourboire est la règle ; en transport, « Aucun » par défaut (métro, bus).
-  if (id === 'food') $('opt-tip').checked = true;
-  if (id === 'transport') $('opt-tip').checked = false;
+  // Resto et taxi : le pourboire est la règle (« Aucun » à choisir pour le métro).
+  if (isShared(id)) $('opt-tip').checked = true;
   renderCategories();
   render();
   haptic();
@@ -750,13 +749,10 @@ function recategorize(it, id) {
   if (isShared(id) && !isShared(it.category)) {
     unit *= qty; // une seule addition (resto) ou course (transport)
     qty = 1;
-  }
-  if (id === 'food' && it.category !== 'food') {
     opts.tip = true;
     opts.tipPct = state.taxes.tip.default;
     opts.tipBasis = 'pre';
   }
-  if (id === 'transport') opts.tip = false;
   if (!isShared(id)) {
     opts.tip = false;
     split = 1;

@@ -1,4 +1,4 @@
-// Catégorie Transport : pas de taxe ajoutée, pourboire « Aucun » par défaut, partage, explication ⓘ.
+// Catégorie Transport : pas de taxe ajoutée, pourboire de taxi (20 %) par défaut, partage, explication ⓘ.
 import { chromium } from 'playwright';
 const out = process.argv[2];
 const scheme = process.argv[3] || 'light';
@@ -18,9 +18,10 @@ const close = async () => { if (await p.isVisible('#keypad')) { await p.goBack()
 ok('6 catégories', (await p.$$('#categories .cat')).length === 6);
 await p.click('#categories .cat:has-text("Transport")');
 await p.click('#price'); await keys('3'); await close();
-ok(`métro sans taxe: ${await p.textContent('#total-sub')}`, (await p.textContent('#total-sub')) === 'Total : $3.00');
-ok('pourboire Aucun par défaut', (await p.getAttribute('#tip-choices .chip:has-text("Aucun")', 'aria-checked')) === 'true');
-ok(`texte court: ${await p.textContent('#cat-info-text')}`, (await p.isVisible('#cat-info')) && (await p.textContent('#cat-info-text')).includes('incluses'));
+ok('pourboire 20 % par défaut (taxi)', (await p.getAttribute('#tip-choices .chip:has-text("20")', 'aria-checked')) === 'true');
+await p.click('#tip-choices .chip:has-text("Aucun")'); await p.waitForTimeout(200);
+ok(`métro sans taxe ni pourboire: ${await p.textContent('#total-sub')}`, (await p.textContent('#total-sub')) === 'Total : $3.00');
+ok(`texte court: ${await p.textContent('#cat-info-text')}`, (await p.isVisible('#cat-info')) && (await p.textContent('#cat-info-text')) === 'Taxes incluses · métro sans pourboire');
 ok('base de calcul masquée', await p.isHidden('#tip-panel'));
 await p.click('#cat-info'); await p.waitForTimeout(200);
 ok(`explication: ${await p.textContent('#info-title')}`, (await p.isVisible('#info-dialog')) && (await p.textContent('#info-body')).includes('Uber'));
