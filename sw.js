@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'prix-ny-v22';
+const CACHE = 'prix-ny-v23';
 const SHELL = [
   './',
   'index.html',

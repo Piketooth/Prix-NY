@@ -61,7 +61,8 @@ const state = {
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
   settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2,
     // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
-    screens: ['main', 'cart', 'saved', 'apps', 'settings'],
+    screens: ['main', 'apps', 'cart', 'saved', 'settings'],
+    // apps : applis affichées, dans l'ordre choisi ; « c:paquet » pour celles ajoutées depuis le téléphone
     apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
     customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
     // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour
@@ -294,17 +295,10 @@ function showCatInfo() {
 }
 
 const PAGE_INFO = {
-  apps: ['Applis utiles', [
-    'Des raccourcis vers les applis pratiques pendant un séjour à New York : se déplacer, réserver, payer, traduire.',
-    ['Appli en couleur', 'elle est installée, touchez-la pour l’ouvrir'],
-    ['Appli grisée', 'elle n’est pas installée, touchez-la pour l’installer depuis le Play Store'],
-    ['Choix des applis', 'dans les Réglages, « Applis utiles affichées » : cochez celles de la liste ou ajoutez les vôtres depuis le téléphone'],
-    'Vous pouvez aussi venir ici en faisant glisser le doigt d’un écran à l’autre.',
-  ]],
   settings: ['Réglages', [
     'Tout ce qui personnalise l’appli. Les réglages sont gardés sur le téléphone.',
     ['Écrans', 'ordre dans lequel on passe d’un écran à l’autre en faisant glisser le doigt'],
-    ['Applis utiles', 'applis proposées dans la page de raccourcis'],
+    ['Applis utiles', 'applis affichées dans la page de raccourcis, leur ordre, et vos propres applis'],
     ['Taux de change', 'cours officiel de la BCE mis à jour, ou votre propre taux ; frais bancaires de votre carte'],
     ['Taxe de vente', 'sales tax de New York ajoutée aux prix affichés, avec les exonérations'],
     ['Saisie vocale', 'langue utilisée pour dicter les prix'],
@@ -1465,9 +1459,13 @@ function initSettings() {
       const f = s.frostScale === 2 ? s.frost : Math.round((55 + 0.3 * s.frost) / 0.85);
       state.settings.frost = Math.min(100, Math.max(0, f));
     }
-    if (Array.isArray(s.screens) && s.screens.length === SCREEN_IDS.length && SCREEN_IDS.every((id) => s.screens.includes(id))) state.settings.screens = s.screens;
-    if (Array.isArray(s.apps)) state.settings.apps = s.apps.filter((id) => APPS.some((a) => a.id === id));
+    // Ancien ordre par défaut (Applis après Mes paniers) : nouvel ordre par défaut, Applis juste après l'accueil.
+    if (Array.isArray(s.screens) && s.screens.length === SCREEN_IDS.length && SCREEN_IDS.every((id) => s.screens.includes(id))
+      && s.screens.join() !== 'main,cart,saved,apps,settings') state.settings.screens = s.screens;
     if (Array.isArray(s.customApps)) state.settings.customApps = s.customApps.filter((a) => a?.pkg && a?.name);
+    const custom = state.settings.customApps.map((c) => `c:${c.pkg}`);
+    const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
+    state.settings.apps = [...apps, ...custom.filter((id) => !apps.includes(id))];
     if (s.frostAnim) {
       const f = s.frostAnim, num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
       state.settings.frostAnim = { on: !!f.on, every: num(f.every, 5, 300, 20), from: num(f.from, 0, 100, 30), to: num(f.to, 0, 100, 90), dur: num(f.dur, 1, 60, 4) };
@@ -1782,29 +1780,33 @@ function renderScreenOrder() {
 // --- Applis utiles : ouvrir l'appli si elle est installée, sinon sa page du Play Store -------
 
 const APPS = [
-  { id: 'maps', pkg: 'com.google.android.apps.maps', name: 'Google Maps', desc: 'Plans, itinéraires', emoji: '🗺️', color: '#7fc8a9' },
-  { id: 'citymapper', pkg: 'com.citymapper.app.release', name: 'Citymapper', desc: 'Métro, bus, à pied', emoji: '🧭', color: '#9be15d' },
-  { id: 'mta', pkg: 'info.mta.mymta', name: 'MTA', desc: 'Métro et bus en direct', emoji: '🚇', color: '#5b9cf0' },
-  { id: 'uber', pkg: 'com.ubercab', name: 'Uber', desc: 'VTC', emoji: '🚗', color: '#c9ced6' },
-  { id: 'lyft', pkg: 'me.lyft.android', name: 'Lyft', desc: 'VTC', emoji: '🚙', color: '#ff8fc8' },
-  { id: 'curb', pkg: 'com.ridecharge.android.taximagic', name: 'Curb', desc: 'Taxis jaunes', emoji: '🚕', color: '#ffd23f' },
-  { id: 'citibike', pkg: 'com.citibikenyc.citibike', name: 'Citi Bike', desc: 'Vélos en libre-service', emoji: '🚲', color: '#6ec6ff' },
-  { id: 'ferry', pkg: 'co.bytemark.nycf', name: 'NYC Ferry', desc: 'Navettes fluviales', emoji: '⛴️', color: '#7fb3ff' },
-  { id: 'translate', pkg: 'com.google.android.apps.translate', name: 'Traduction', desc: 'Google Traduction', emoji: '🌐', color: '#8ab4f8' },
-  { id: 'wallet', pkg: 'com.google.android.apps.walletnfcrel', name: 'Google Wallet', desc: 'Payer, OMNY', emoji: '💳', color: '#ffb734' },
-  { id: 'wise', pkg: 'com.transferwise.android', name: 'Wise', desc: 'Carte sans frais', emoji: '💸', color: '#b5e48c' },
-  { id: 'yelp', pkg: 'com.yelp.android', name: 'Yelp', desc: 'Restos, avis', emoji: '⭐', color: '#ff7a59' },
-  { id: 'opentable', pkg: 'com.opentable', name: 'OpenTable', desc: 'Réserver un resto', emoji: '🍽️', color: '#ff9e9e' },
-  { id: 'todaytix', pkg: 'com.todaytix.TodayTix', name: 'TodayTix', desc: 'Billets de spectacles', emoji: '🎭', color: '#f6a6ff' },
+  { id: 'maps', pkg: 'com.google.android.apps.maps', name: 'Google Maps', desc: 'Plans, itinéraires', emoji: '🗺️', color: '#7fc8a9', use: 'plans, itinéraires à pied, en métro ou en voiture, horaires des magasins et des musées' },
+  { id: 'citymapper', pkg: 'com.citymapper.app.release', name: 'Citymapper', desc: 'Métro, bus, à pied', emoji: '🧭', color: '#9be15d', use: 'le meilleur trajet en transports en commun, avec la bonne sortie de métro et les perturbations' },
+  { id: 'mta', pkg: 'info.mta.mymta', name: 'MTA', desc: 'Métro et bus en direct', emoji: '🚇', color: '#5b9cf0', use: 'l’appli officielle du métro et des bus : passages en temps réel, travaux, plans' },
+  { id: 'uber', pkg: 'com.ubercab', name: 'Uber', desc: 'VTC', emoji: '🚗', color: '#c9ced6', use: 'VTC : prix annoncé avant de commander, paiement dans l’appli' },
+  { id: 'lyft', pkg: 'me.lyft.android', name: 'Lyft', desc: 'VTC', emoji: '🚙', color: '#ff8fc8', use: 'VTC concurrent d’Uber : comparez les prix selon l’heure' },
+  { id: 'curb', pkg: 'com.ridecharge.android.taximagic', name: 'Curb', desc: 'Taxis jaunes', emoji: '🚕', color: '#ffd23f', use: 'commander et payer un taxi jaune depuis le téléphone' },
+  { id: 'citibike', pkg: 'com.citibikenyc.citibike', name: 'Citi Bike', desc: 'Vélos en libre-service', emoji: '🚲', color: '#6ec6ff', use: 'vélos en libre-service : stations, vélos et places libres, location à la course ou à la journée' },
+  { id: 'ferry', pkg: 'co.bytemark.nycf', name: 'NYC Ferry', desc: 'Navettes fluviales', emoji: '⛴️', color: '#7fb3ff', use: 'navettes fluviales vers Brooklyn, Queens et Rockaway : horaires et billets' },
+  { id: 'translate', pkg: 'com.google.android.apps.translate', name: 'Traduction', desc: 'Google Traduction', emoji: '🌐', color: '#8ab4f8', use: 'traduire un menu, une étiquette ou une conversation, aussi avec l’appareil photo' },
+  { id: 'wallet', pkg: 'com.google.android.apps.walletnfcrel', name: 'Google Wallet', desc: 'Payer, OMNY', emoji: '💳', color: '#ffb734', use: 'payer sans contact avec le téléphone, y compris le métro et le bus (OMNY)' },
+  { id: 'wise', pkg: 'com.transferwise.android', name: 'Wise', desc: 'Carte sans frais', emoji: '💸', color: '#b5e48c', use: 'carte et compte multidevises, sans frais de change cachés' },
+  { id: 'yelp', pkg: 'com.yelp.android', name: 'Yelp', desc: 'Restos, avis', emoji: '⭐', color: '#ff7a59', use: 'trouver restaurants, bars et magasins avec les avis et les photos' },
+  { id: 'opentable', pkg: 'com.opentable', name: 'OpenTable', desc: 'Réserver un resto', emoji: '🍽️', color: '#ff9e9e', use: 'réserver une table au restaurant' },
+  { id: 'todaytix', pkg: 'com.todaytix.TodayTix', name: 'TodayTix', desc: 'Billets de spectacles', emoji: '🎭', color: '#f6a6ff', use: 'billets de Broadway et de spectacles, loteries et places à prix réduit du jour' },
 ];
 const appInstalled = new Map(); // pkg → true / false (APK seulement)
 const playUrl = (pkg) => `https://play.google.com/store/apps/details?id=${pkg}`;
 
 // Applis affichées : celles de la liste cochées, puis celles ajoutées depuis le téléphone.
-const shownApps = () => [
-  ...APPS.filter((a) => state.settings.apps.includes(a.id)),
-  ...state.settings.customApps.map((c) => ({ id: `c:${c.pkg}`, pkg: c.pkg, name: c.name, desc: 'Mon appli', emoji: '📱', color: '#7a8499', custom: true })),
-];
+const customApp = (c) => ({ id: `c:${c.pkg}`, pkg: c.pkg, name: c.name, desc: 'Mon appli', use: 'appli ajoutée depuis votre téléphone', emoji: '📱', color: '#7a8499', custom: true });
+const appById = (id) => APPS.find((a) => a.id === id)
+  || (id.startsWith('c:') && state.settings.customApps.some((c) => `c:${c.pkg}` === id) ? customApp(state.settings.customApps.find((c) => `c:${c.pkg}` === id)) : null);
+// Applis affichées dans l'ordre choisi ; dans l'APK, celles qui ne sont pas installées passent à la fin.
+const shownApps = () => {
+  const list = state.settings.apps.map(appById).filter(Boolean);
+  return [...list.filter((a) => appInstalled.get(a.pkg) !== false), ...list.filter((a) => appInstalled.get(a.pkg) === false)];
+};
 const appIcons = new Map(); // pkg → icône officielle (data URL), lue sur le téléphone
 
 async function checkApps(apps) {
@@ -1900,44 +1902,62 @@ async function renderApps() {
   draw();
 }
 
+// Réglages : applis cochées dans l'ordre d'affichage (▲ ▼), puis celles de la liste non cochées.
 function renderAppsChoice() {
   const box = $('apps-choice');
-  const chips = APPS.map((a) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'chip';
-    b.setAttribute('aria-pressed', String(state.settings.apps.includes(a.id)));
-    b.textContent = `${a.emoji} ${a.name}`;
-    b.addEventListener('click', () => {
-      const on = state.settings.apps.includes(a.id);
-      // On garde l'ordre de la liste proposée.
-      state.settings.apps = APPS.map((x) => x.id).filter((id) => (id === a.id ? !on : state.settings.apps.includes(id)));
-      store.set('settings', state.settings);
-      renderAppsChoice();
-      haptic();
+  const sel = state.settings.apps;
+  const save = () => { store.set('settings', state.settings); renderAppsChoice(); haptic(); };
+  const rows = [...sel.map(appById).filter(Boolean), ...APPS.filter((a) => !sel.includes(a.id))];
+  box.replaceChildren(...rows.map((a) => {
+    const on = sel.includes(a.id);
+    const i = sel.indexOf(a.id);
+    const li = document.createElement('li');
+    li.className = on ? 'on' : '';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = on;
+    check.setAttribute('aria-label', `Afficher ${a.name}`);
+    check.addEventListener('change', () => {
+      state.settings.apps = on ? sel.filter((id) => id !== a.id) : [...sel, a.id];
+      save();
     });
-    return b;
-  });
-  // Applis ajoutées depuis le téléphone : toujours affichées, × pour les retirer.
-  for (const c of state.settings.customApps) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'chip custom-app';
-    b.setAttribute('aria-pressed', 'true');
-    b.setAttribute('aria-label', `Retirer ${c.name}`);
-    const icon = appIcons.get(c.pkg);
-    if (icon) { const img = document.createElement('img'); img.src = icon; img.alt = ''; b.append(img); }
-    b.append(`${c.name} ×`);
-    b.addEventListener('click', () => {
-      state.settings.customApps = state.settings.customApps.filter((x) => x.pkg !== c.pkg);
-      store.set('settings', state.settings);
-      renderAppsChoice();
-      haptic('medium');
-      toast(`${c.name} retirée des applis utiles`);
-    });
-    chips.push(b);
-  }
-  box.replaceChildren(...chips);
+    const icon = document.createElement('span');
+    icon.className = 'pick-icon';
+    const official = appIcons.get(a.pkg);
+    if (official) { const img = document.createElement('img'); img.src = official; img.alt = ''; icon.append(img); } else icon.textContent = a.emoji;
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = a.name;
+    li.append(check, icon, name);
+    if (on) {
+      const move = (d, label, text) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = text;
+        b.disabled = !sel[i + d];
+        b.setAttribute('aria-label', `${label} : ${a.name}`);
+        b.addEventListener('click', () => { [sel[i], sel[i + d]] = [sel[i + d], sel[i]]; save(); });
+        return b;
+      };
+      li.append(move(-1, 'Monter', '▲'), move(1, 'Descendre', '▼'));
+    }
+    if (a.custom) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '×';
+      del.setAttribute('aria-label', `Retirer ${a.name}`);
+      del.addEventListener('click', () => {
+        state.settings.customApps = state.settings.customApps.filter((c) => c.pkg !== a.pkg);
+        state.settings.apps = sel.filter((id) => id !== a.id);
+        save();
+        toast(`${a.name} retirée des applis utiles`);
+      });
+      li.append(del);
+    }
+    // Case à cocher sur toute la ligne (hors boutons)
+    li.addEventListener('click', (e) => { if (!e.target.closest('button, input')) check.click(); });
+    return li;
+  }));
   $('app-add').hidden = !IS_NATIVE;
 }
 
@@ -1968,6 +1988,7 @@ async function openAppPicker() {
       b.append(img, a.name);
       b.addEventListener('click', () => {
         state.settings.customApps.push({ pkg: a.pkg, name: a.name });
+        state.settings.apps.push(`c:${a.pkg}`);
         store.set('settings', state.settings);
         renderAppsChoice();
         haptic('success');
@@ -2771,11 +2792,17 @@ function init() {
   });
   $('menu-cart').addEventListener('click', () => openView('cart-view'));
   $('menu-saved').addEventListener('click', () => openView('saved-view'));
-  $('settings-open').addEventListener('click', () => openView('settings-view'));
+  $('settings-open').addEventListener('click', () => {
+    openView('settings-view');
+    checkApps([...APPS, ...state.settings.customApps.map(customApp)]).then(renderAppsChoice); // icônes du téléphone
+  });
   $('apps-open').addEventListener('click', () => { openView('apps-view'); renderApps(); });
   $('app-add').addEventListener('click', openAppPicker);
   initFrostAnim();
-  $('apps-info').addEventListener('click', () => showInfo(...PAGE_INFO.apps));
+  $('apps-info').addEventListener('click', () => {
+    const list = shownApps();
+    showInfo('Les applis', list.length ? list.map((a) => [a.name, a.use]) : ['Aucune appli choisie : cochez-en dans les Réglages.']);
+  });
   $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
   // Retour dans l'appli : une appli a peut-être été installée entre-temps.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('apps-view').hidden) renderApps(); });

@@ -51,19 +51,19 @@ await p.goBack(); await p.waitForTimeout(250);
 ok('retour à l’accueil', (await p.evaluate(() => openViews.length)) === 0);
 const seen = ['main'];
 for (let i = 0; i < 4; i++) { await swipe(320, 60); seen.push(await where()); }
-ok(`balayage vers la gauche: ${seen.join(' → ')}`, seen.join() === 'main,cart,saved,apps,settings');
+ok(`balayage vers la gauche: ${seen.join(' → ')}`, seen.join() === 'main,apps,cart,saved,settings');
 ok('points de position affichés', await p.isVisible('#screen-dots'));
 await swipe(320, 60);
 ok('fin de liste : reste sur Réglages', (await where()) === 'settings');
 const back = [];
 for (let i = 0; i < 4; i++) { await swipe(80, 340); back.push(await where()); }
-ok(`balayage vers la droite: ${back.join(' → ')}`, back.join() === 'apps,saved,cart,main');
+ok(`balayage vers la droite: ${back.join(' → ')}`, back.join() === 'saved,cart,apps,main');
 ok('accueil visible', !(await p.evaluate(() => document.body.classList.contains('no-scroll'))));
 
 // Écrans empilés (Panier puis Mes paniers) : un balayage n'en garde qu'un, le retour mène à l'accueil
 await p.click('#cart-open'); await p.waitForTimeout(250); await p.click('#saved-open'); await p.waitForTimeout(250);
 await swipe(320, 60);
-ok(`depuis Mes paniers: ${await where()}`, (await where()) === 'apps' && (await p.evaluate(() => openViews.length)) === 1);
+ok(`depuis Mes paniers: ${await where()}`, (await where()) === 'settings' && (await p.evaluate(() => openViews.length)) === 1);
 await p.goBack(); await p.waitForTimeout(400);
 ok(`retour: ${await where()}`, (await where()) === 'main');
 
@@ -71,7 +71,10 @@ ok(`retour: ${await where()}`, (await where()) === 'main');
 // Applis utiles : grisées si absentes, ouverture ou Play Store
 await p.click('#menu-open'); await p.click('#apps-open'); await p.waitForTimeout(500);
 const tiles = await p.$$eval('.app-tile', (l) => l.map((x) => `${x.querySelector('.app-name').textContent}${x.classList.contains('missing') ? '-' : '+'}`));
-ok(`applis: ${tiles.join(' ')}`, tiles.length === 11 && tiles[0] === 'Google Maps+' && tiles[3] === 'Uber+' && tiles[1] === 'Citymapper-' && !tiles.includes('Revolut+') && !tiles.includes('Revolut-'));
+ok(`applis (non installées à la fin): ${tiles.join(' ')}`, tiles.length === 11 && tiles[0] === 'Google Maps+' && tiles[1] === 'Uber+' && tiles[2] === 'Citymapper-' && tiles.slice(2).every((t) => t.endsWith('-')) && !tiles.some((t) => t.startsWith('Revolut')));
+await p.click('#apps-info'); await p.waitForTimeout(200);
+ok(`aide = chaque appli: ${await p.textContent('#info-title')}`, (await p.textContent('#info-title')) === 'Les applis' && (await p.$$('#info-body p')).length === 11 && (await p.textContent('#info-body p:nth-child(2)')).startsWith('Uber : VTC'));
+await p.keyboard.press('Escape'); await p.waitForTimeout(200);
 ok('icône officielle si installée', (await p.$$('.app-tile:not(.missing) .app-icon.official img')).length === 2);
 ok('icône générique grisée sinon', (await p.textContent('.app-tile.missing .app-icon.generic')) === 'C' && (await p.textContent('.app-tile.missing .app-get')) === 'Non installée');
 ok(`note: ${await p.textContent('#apps-note')}`, (await p.textContent('#apps-note')).startsWith('Grisée, application non installée'));
@@ -85,15 +88,20 @@ await p.goBack(); await p.waitForTimeout(300);
 await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(300);
 await p.click('#screen-order li:nth-child(4) button:has-text("▲")'); await p.waitForTimeout(150);
 const order = await p.$$eval('#screen-order .name', (l) => l.map((x) => x.textContent));
-ok(`ordre: ${order.join(', ')}`, order.join() === 'Accueil,Panier,Applis utiles,Mes paniers,Réglages');
-await p.click('#apps-choice .chip:has-text("Citymapper")'); await p.click('#apps-choice .chip:has-text("NYC Ferry")'); await p.waitForTimeout(150);
+ok(`ordre: ${order.join(', ')}`, order.join() === 'Accueil,Applis utiles,Mes paniers,Panier,Réglages');
+// (le 4e, Mes paniers, est monté d'un cran)
+await p.click('#apps-choice li:has-text("Citymapper") input'); await p.click('#apps-choice li:has-text("NYC Ferry") .name'); await p.waitForTimeout(150);
+await p.click('#apps-choice li:has-text("Uber") button:has-text("▲")'); await p.waitForTimeout(100);
+const sel = await p.$$eval('#apps-choice li.on .name', (l) => l.map((x) => x.textContent));
+ok(`ordre des applis: ${sel.join(', ')}`, sel[0] === 'Google Maps' && sel[1] === 'Uber' && sel[2] === 'MTA' && sel.at(-1) === 'NYC Ferry' && !sel.includes('Citymapper'));
+await p.click('#apps-choice li:has-text("Uber") button:has-text("▲")'); await p.waitForTimeout(100);
 // Ajouter une appli du téléphone (liste sans celles déjà proposées)
 await p.click('#app-add'); await p.waitForTimeout(300);
 const pick = await p.$$eval('.app-pick', (l) => l.map((x) => x.textContent));
 ok(`applis du téléphone: ${pick.join(', ')}`, pick.join() === 'WhatsApp,Wikipédia');
 await p.click('.app-pick:has-text("WhatsApp")'); await p.waitForTimeout(150);
 await p.click('#app-pick-dialog button[value=ok]'); await p.waitForTimeout(150);
-ok('appli ajoutée dans les réglages', await p.isVisible('#apps-choice .custom-app:has-text("WhatsApp")'));
+ok('appli ajoutée dans les réglages', await p.isVisible('#apps-choice li.on:has-text("WhatsApp") button:has-text("×")'));
 // Givré animé
 await p.check('#opt-frost-anim'); await p.waitForTimeout(100);
 ok('réglages du givré animé', (await p.isVisible('#frost-anim-box')) && (await p.isHidden('#frost-fixed')));
@@ -104,17 +112,14 @@ await p.waitForTimeout(3600);
 const a2 = Number(await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--glass-a')));
 ok(`givré qui monte: ${a1.toFixed(2)} → ${a2.toFixed(2)}`, a1 > 0.26 && a2 > a1 && a2 <= 0.77);
 await p.reload(); await p.waitForTimeout(800);
-ok('ordre mémorisé', (await p.evaluate(() => state.settings.screens.join())) === 'main,cart,apps,saved,settings');
-await swipe(320, 60); await swipe(320, 60);
+ok('ordre mémorisé', (await p.evaluate(() => state.settings.screens.join())) === 'main,apps,saved,cart,settings');
+await swipe(320, 60);
 ok(`nouvel ordre appliqué: ${await where()}`, (await where()) === 'apps');
 const names = await p.$$eval('.app-name', (l) => l.map((x) => x.textContent));
-ok(`choix des applis: ${names.join(', ')}`, !names.includes('Citymapper') && names.includes('NYC Ferry') && names.at(-1) === 'WhatsApp');
+ok(`choix et ordre des applis: ${names.join(', ')}`, names.slice(0, 3).join() === 'Uber,Google Maps,WhatsApp' && !names.includes('Citymapper') && names.at(-1) === 'NYC Ferry');
 ok('givré animé mémorisé', await p.evaluate(() => state.settings.frostAnim.on));
 await p.screenshot({ path: `${out}/ecrans-${scheme}.png` });
-await p.click('#apps-info'); await p.waitForTimeout(200);
-ok(`aide Applis: ${await p.textContent('#info-title')}`, (await p.isVisible('#info-dialog')) && (await p.textContent('#info-body')).includes('Play Store'));
-await p.keyboard.press('Escape'); await p.waitForTimeout(200);
-await swipe(320, 60); await swipe(320, 60);
+await swipe(320, 60); await swipe(320, 60); await swipe(320, 60);
 await p.click('#settings-info'); await p.waitForTimeout(200);
 ok(`aide Réglages: ${await p.textContent('#info-title')}`, (await p.textContent('#info-title')) === 'Réglages' && (await p.textContent('#info-body')).includes('Deuxième horloge'));
 ok(`${scheme} erreurs JS: ${errs}`, errs.length === 0);

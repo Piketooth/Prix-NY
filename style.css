@@ -618,8 +618,6 @@ main { padding-bottom: 130px; }
 .frost-anim[hidden], #frost-fixed[hidden] { display: none; }
 .anim-row { display: grid; grid-template-columns: 82px 1fr 52px; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; }
 .anim-row b { text-align: right; font-variant-numeric: tabular-nums; }
-.chip.custom-app { display: inline-flex; align-items: center; gap: 6px; }
-.chip.custom-app img { width: 20px; height: 20px; border-radius: 5px; }
 .app-pick-dialog form { display: grid; gap: 10px; }
 .app-pick-list { max-height: 50vh; overflow-y: auto; display: grid; gap: 2px; }
 .app-pick { display: flex; align-items: center; gap: 12px; padding: 8px; border: none; border-radius: 12px; background: none; color: var(--text); font: inherit; font-size: 17px; font-weight: 700; text-align: left; cursor: pointer; }
@@ -655,7 +653,15 @@ main { padding-bottom: 130px; }
 .app-tile.missing .app-name { opacity: .55; }
 .app-get { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--total); }
 .apps-note { margin-top: 14px; }
-.apps-choice .chip { font-size: 15px; padding: 5px 11px; }
+.apps-choice { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.apps-choice li { display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 10px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--field); font-size: 16px; font-weight: 800; cursor: pointer; }
+.apps-choice li:not(.on) { opacity: .6; }
+.apps-choice input { width: 20px; height: 20px; accent-color: var(--amber); flex: none; }
+.apps-choice .pick-icon { width: 28px; height: 28px; display: grid; place-items: center; font-size: 20px; flex: none; }
+.apps-choice .pick-icon img { width: 28px; height: 28px; border-radius: 7px; }
+.apps-choice .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apps-choice button { width: 36px; height: 32px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--glass); color: var(--text); font-size: 15px; font-weight: 900; cursor: pointer; flex: none; }
+.apps-choice button:disabled { opacity: .3; }
 
 /* Ordre des écrans */
 .screen-order { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
