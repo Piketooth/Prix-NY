@@ -628,6 +628,7 @@ main { padding-bottom: 130px; }
 .apps-scroll { flex: 1; overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
 .apps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .app-tile {
+  position: relative;
   display: grid; justify-items: center; gap: 4px;
   padding: 12px 6px 10px;
   border-radius: 20px;
@@ -653,6 +654,8 @@ main { padding-bottom: 130px; }
 .app-tile.missing .app-name { opacity: .55; }
 .app-get { font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--total); }
 .apps-note { margin-top: 14px; }
+.app-info { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; line-height: 24px; font-size: 16px; cursor: pointer; }
+.app-info::before { content: ""; position: absolute; inset: -10px; } /* zone de toucher élargie */
 .apps-choice { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
 .apps-choice li { display: flex; align-items: center; gap: 10px; padding: 5px 6px 5px 10px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--field); font-size: 16px; font-weight: 800; cursor: pointer; }
 .apps-choice li:not(.on) { opacity: .6; }

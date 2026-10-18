@@ -1887,7 +1887,17 @@ async function renderApps() {
       const desc = document.createElement('span');
       desc.className = missing ? 'app-get' : 'app-desc';
       desc.textContent = missing ? 'Non installée' : a.desc;
-      b.append(appIconEl(a), name, desc);
+      // ⓘ : à quoi sert l'appli (sans l'ouvrir)
+      const info = document.createElement('span');
+      info.className = 'app-info info-i';
+      info.textContent = 'i';
+      info.setAttribute('role', 'button');
+      info.setAttribute('aria-label', `À quoi sert ${a.name}`);
+      info.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showInfo(a.name, [a.use[0].toUpperCase() + a.use.slice(1) + '.', missing ? 'Application non installée : touchez la vignette pour l’installer depuis le Play Store.' : 'Touchez la vignette pour l’ouvrir.']);
+      });
+      b.append(appIconEl(a), name, desc, info);
       b.addEventListener('click', () => launchApp(a));
       return b;
     }));
@@ -2799,10 +2809,6 @@ function init() {
   $('apps-open').addEventListener('click', () => { openView('apps-view'); renderApps(); });
   $('app-add').addEventListener('click', openAppPicker);
   initFrostAnim();
-  $('apps-info').addEventListener('click', () => {
-    const list = shownApps();
-    showInfo('Les applis', list.length ? list.map((a) => [a.name, a.use]) : ['Aucune appli choisie : cochez-en dans les Réglages.']);
-  });
   $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
   // Retour dans l'appli : une appli a peut-être été installée entre-temps.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('apps-view').hidden) renderApps(); });
