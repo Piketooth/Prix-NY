@@ -355,13 +355,19 @@
         </label>
         <p class="note">Texte et cartes en clair ou en sombre selon la photo, pour rester lisibles. Sinon, l'appli suit le mode clair ou sombre du téléphone.</p>
         <div id="frost-fixed">
-          <label for="set-frost" class="label">Intensité du givré</label>
+          <label for="set-frost" class="label">Flou du givré</label>
           <div class="range-row">
             <span class="muted">0 %</span>
             <input id="set-frost" class="range" type="range" min="0" max="100" step="5">
             <b id="set-frost-v" class="range-val"></b>
           </div>
-          <p class="note">0 % : cartes transparentes, la photo se voit entièrement. 100 % : cartes presque opaques et floues, le texte se lit le mieux.</p>
+          <label for="set-opacity" class="label">Opacité des cartes</label>
+          <div class="range-row">
+            <span class="muted">0 %</span>
+            <input id="set-opacity" class="range" type="range" min="0" max="100" step="5">
+            <b id="set-opacity-v" class="range-val"></b>
+          </div>
+          <p class="note">Flou : 0 % la photo reste nette derrière les cartes, 100 % elle devient floue. Opacité : 0 % cartes transparentes, 100 % cartes pleines ; plus elle est haute, mieux le texte se lit.</p>
         </div>
         <label class="check">
           <input id="opt-frost-anim" type="checkbox">

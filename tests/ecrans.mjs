@@ -108,15 +108,15 @@ await p.click('#app-pick-dialog button[value=ok]'); await p.waitForTimeout(150);
 ok('appli ajoutée dans les réglages', await p.isVisible('#my-apps li.on:has-text("WhatsApp") button:has-text("×")'));
 // Givré animé
 await p.check('#opt-frost-anim'); await p.waitForTimeout(100);
-ok('réglages du givré animé', (await p.isVisible('#frost-anim-box')) && (await p.isHidden('#frost-fixed')));
-ok(`givré animé: ${await p.textContent('#fa-note')}`, (await p.textContent('#fa-note')).startsWith('Le givré reste à 25 %. Toutes les 20 s, il passe à 0 % en 2 s'));
+ok('réglages du givré animé', (await p.isVisible('#frost-anim-box')) && (await p.isVisible('#set-opacity')));
+ok(`givré animé: ${await p.textContent('#fa-note')}`, (await p.textContent('#fa-note')).startsWith('Le givré reste à 100 % du flou et de l’opacité réglés. Toutes les 20 s, il passe à 0 % en 2 s'));
 await p.waitForTimeout(450);
 const a0 = Number(await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--glass-a')));
 await p.waitForTimeout(2300);
 const a1 = Number(await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--glass-a')));
 await p.waitForTimeout(2300);
 const a2 = Number(await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--glass-a')));
-ok(`givré qui descend puis revient: ${a0.toFixed(2)} → ${a1.toFixed(2)} → ${a2.toFixed(2)}`, Math.abs(a0 - 0.21) < 0.02 && a1 < 0.03 && Math.abs(a2 - 0.21) < 0.02);
+ok(`givré qui descend puis revient: ${a0.toFixed(2)} → ${a1.toFixed(2)} → ${a2.toFixed(2)}`, Math.abs(a0 - 0.64) < 0.02 && a1 < 0.03 && Math.abs(a2 - 0.64) < 0.02);
 await p.reload(); await p.waitForTimeout(800);
 ok('ordre mémorisé', (await p.evaluate(() => state.settings.screens.join())) === 'main,apps,cart,calc,saved,weather,settings');
 await swipe(320, 60);

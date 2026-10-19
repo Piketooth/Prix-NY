@@ -27,6 +27,10 @@ ok('menu disponible sur la page', await p.isVisible('#menu-open'));
 const groups = await p.$$eval('.settings-group', (l) => l.map((x) => x.textContent));
 ok(`rubriques: ${groups.join(', ')}`, groups.join() === 'Argent,Heure,Saisie,Navigation,Apparence');
 ok(`givré en %: ${await p.textContent('#set-frost-v')}`, /^\d+ %$/.test(await p.textContent('#set-frost-v')));
+// Flou et opacité indépendants
+await p.fill('#set-opacity', '30'); await p.fill('#set-frost', '100'); await p.waitForTimeout(100);
+const glass = await p.evaluate(() => { const c = getComputedStyle(document.documentElement); return [c.getPropertyValue('--glass-a').trim(), c.getPropertyValue('--blur').trim(), state.settings.opacity]; });
+ok(`flou et opacité séparés: ${glass}`, Number(glass[0]) === 0.3 && glass[1] === '28px' && glass[2] === 30);
 // Bulles ⓘ : croix en haut à gauche, toucher en dehors
 await p.click('#settings-info'); await p.waitForTimeout(250);
 ok('pas de bouton Compris', !(await p.$('#info-dialog .btn')));

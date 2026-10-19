@@ -60,17 +60,18 @@ const state = {
   split: 1,
   // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
   // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
-  // adaptive : couleurs selon la photo ; frost : intensité du givré (0 aucun → 100 fort)
+  // adaptive : couleurs selon la photo ; frost : flou du givré, opacity : opacité des cartes (0 → 100 %)
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2,
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, opacity: 64, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 3,
     // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
     screens: ['main', 'apps', 'calc', 'cart', 'saved', 'weather', 'settings'],
     // apps : applis affichées, dans l'ordre choisi ; « c:paquet » pour celles ajoutées depuis le téléphone
     apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
     customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
     hideMissing: false, // masquer les applis non installées (APK)
-    // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour
-    frostAnim: { on: false, every: 20, from: 25, to: 0, dur: 2 },
+    // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour ;
+    // niveaux en % des réglages Flou et Opacité (100 % = réglages, 0 % = cartes transparentes)
+    frostAnim: { on: false, every: 20, from: 100, to: 0, dur: 2 },
     tint: null, // teinte du givré (#rrggbb) ; null = neutre
     glow: 100 }, // ombres et lueurs : 100 % = dosage automatique
 };
@@ -1686,10 +1687,13 @@ function initSettings() {
     if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper) || /^custom-/.test(s.wallpaper || '')) state.settings.wallpaper = s.wallpaper;
     if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
     if (s.adaptive === false) state.settings.adaptive = false;
+    const clamp = (v) => Math.min(100, Math.max(0, Math.round(v)));
     if (Number.isFinite(s.frost)) {
       // Ancienne échelle (0 = déjà 55 % d'opacité) : même rendu sur la nouvelle, qui part de 0.
-      const f = s.frostScale === 2 ? s.frost : Math.round((55 + 0.3 * s.frost) / 0.85);
-      state.settings.frost = Math.min(100, Math.max(0, f));
+      const f = s.frostScale >= 2 ? s.frost : Math.round((55 + 0.3 * s.frost) / 0.85);
+      state.settings.frost = clamp(f);
+      // Avant les deux curseurs, un seul réglage menait le flou et l'opacité (85 % au maximum).
+      state.settings.opacity = s.frostScale === 3 && Number.isFinite(s.opacity) ? clamp(s.opacity) : clamp(0.85 * state.settings.frost);
     }
     // Ancien ordre par défaut (Applis après Mes paniers) : nouvel ordre par défaut, Applis juste après l'accueil.
     if (Array.isArray(s.screens) && s.screens.join() !== 'main,cart,saved,apps,settings') {
@@ -1707,7 +1711,12 @@ function initSettings() {
     if (Number.isFinite(s.glow)) state.settings.glow = Math.min(200, Math.max(0, s.glow));
     if (s.frostAnim) {
       const f = s.frostAnim, num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
-      state.settings.frostAnim = { on: !!f.on, every: num(f.every, 5, 300, 20), from: num(f.from, 0, 100, 30), to: num(f.to, 0, 100, 90), dur: num(f.dur, 1, 60, 4) };
+      state.settings.frostAnim = { on: !!f.on, every: num(f.every, 5, 300, 20), from: num(f.from, 0, 100, 100), to: num(f.to, 0, 100, 0), dur: num(f.dur, 1, 60, 2) };
+      // Anciens niveaux absolus : convertis en % des réglages, pour garder le même rendu.
+      if (s.frostScale !== 3) {
+        const base = state.settings.frost || 100, a = state.settings.frostAnim;
+        a.from = clamp(a.from * 100 / base); a.to = clamp(a.to * 100 / base);
+      }
     }
     if (s.clock?.tz && s.clock?.label) {
       try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz, ...(Number.isFinite(s.clock.lat) ? { lat: s.clock.lat, lon: s.clock.lon } : {}) }; } catch { /* fuseau inconnu */ }
@@ -1733,14 +1742,16 @@ function initSettings() {
     applyTheme();
     haptic();
   });
-  $('set-frost').value = state.settings.frost;
-  $('set-frost-v').textContent = `${state.settings.frost} %`;
-  $('set-frost').addEventListener('input', () => {
-    state.settings.frost = Number($('set-frost').value);
-    $('set-frost-v').textContent = `${state.settings.frost} %`;
-    applyFrost();
-  });
-  $('set-frost').addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
+  for (const [id, k] of [['set-frost', 'frost'], ['set-opacity', 'opacity']]) {
+    $(id).value = state.settings[k];
+    $(`${id}-v`).textContent = `${state.settings[k]} %`;
+    $(id).addEventListener('input', () => {
+      state.settings[k] = Number($(id).value);
+      $(`${id}-v`).textContent = `${state.settings[k]} %`;
+      applyFrost();
+    });
+    $(id).addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
+  }
   applyFrost();
   $('opt-sound').checked = state.settings.sound;
   $('opt-sound').addEventListener('change', () => { state.settings.sound = $('opt-sound').checked; applySettings(); haptic(); });
@@ -2779,13 +2790,14 @@ function applyTheme() {
   document.documentElement.classList.toggle('theme-light', tone === 'light');
 }
 
-// Givré : de 0 (cartes transparentes, sans flou) à 100 (opacité 85 %, flou 28 px), en « dur » secondes.
+// Givré : flou (0 → 28 px) et opacité (0 → 100 %) réglés à part ; v = % de ces réglages, atteint en « dur » s.
 function setFrostLevel(v, dur = 0) {
   const root = document.documentElement.style;
+  const alpha = state.settings.opacity / 100 * v / 100;
   root.transition = dur ? `--glass-a ${dur}s ease-in-out, --blur ${dur}s ease-in-out` : 'none';
-  root.setProperty('--glass-a', (0.85 * v / 100).toFixed(3));
-  root.setProperty('--blur', `${(28 * v / 100).toFixed(1)}px`);
-  root.setProperty('--halo', (Math.max(0, 60 - v) / 60).toFixed(2)); // halo du texte sous 60 % de givré
+  root.setProperty('--glass-a', alpha.toFixed(3));
+  root.setProperty('--blur', `${(28 * state.settings.frost / 100 * v / 100).toFixed(1)}px`);
+  root.setProperty('--halo', (Math.max(0, 0.5 - alpha) / 0.5).toFixed(2)); // halo du texte sous 50 % d'opacité
 }
 
 // Givré animé : toutes les « every » s, de « from » à « to » en « dur » s, puis retour à « from ».
@@ -2795,7 +2807,7 @@ function applyFrost() {
   clearInterval(frostTimer);
   clearTimeout(frostBack);
   const a = state.settings.frostAnim;
-  if (!a.on) { setFrostLevel(state.settings.frost); return; }
+  if (!a.on) { setFrostLevel(100); return; }
   setFrostLevel(a.from);
   const cycle = () => {
     setFrostLevel(a.to, a.dur);
@@ -2809,14 +2821,13 @@ function renderFrostAnim() {
   const a = state.settings.frostAnim;
   $('opt-frost-anim').checked = a.on;
   $('frost-anim-box').hidden = !a.on;
-  $('frost-fixed').hidden = a.on;
   for (const k of ['every', 'from', 'to', 'dur']) $(`fa-${k}`).value = a[k];
   $('fa-every-v').textContent = `${a.every} s`;
   $('fa-from-v').textContent = `${a.from} %`;
   $('fa-to-v').textContent = `${a.to} %`;
   $('fa-dur-v').textContent = `${a.dur} s`;
   const every = Math.max(a.every, 2 * a.dur + 1);
-  $('fa-note').textContent = `Le givré reste à ${a.from} %. Toutes les ${every} s, il passe à ${a.to} % en ${a.dur} s`
+  $('fa-note').textContent = `Le givré reste à ${a.from} % du flou et de l’opacité réglés. Toutes les ${every} s, il passe à ${a.to} % en ${a.dur} s`
     + (a.to < a.from ? ' (la photo apparaît mieux)' : a.to > a.from ? ' (les cartes se givrent davantage)' : '')
     + `, puis revient à ${a.from} % en ${a.dur} s.`
     + (every > a.every ? ' Délai allongé pour laisser le temps à l’aller-retour.' : '')
