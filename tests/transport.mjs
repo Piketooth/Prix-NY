@@ -15,7 +15,7 @@ const ok = (label, cond) => console.log(cond ? 'OK  ' : 'FAIL', label);
 const keys = async (s) => { for (const ch of s) await p.click(`[data-key="${ch === ',' ? '.' : ch}"]`); };
 const close = async () => { if (await p.isVisible('#keypad')) { await p.goBack(); await p.waitForTimeout(150); } };
 
-ok('6 catégories', (await p.$$('#categories .cat')).length === 6);
+ok('7 catégories', (await p.$$('#categories .cat')).length === 7);
 await p.click('#categories .cat:has-text("Transport")');
 await p.click('#price'); await keys('3'); await close();
 ok('pourboire 20 % par défaut (taxi)', (await p.getAttribute('#tip-choices .chip:has-text("20")', 'aria-checked')) === 'true');

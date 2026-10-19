@@ -1,6 +1,6 @@
-# Vrai Prix New York
+# New York
 
-Appli web installable (PWA) pour Android : elle convertit un prix affiché à New York (USD) en euros, avec la sales tax et le pourboire en option.
+Appli « New York » (PWA et APK Android) : elle convertit un prix affiché à New York (USD) en euros, avec la sales tax et le pourboire en option.
 
 - **Taux de change** : récupéré à chaque ouverture (BCE via [Frankfurter](https://frankfurter.dev), secours [ExchangeRate-API](https://www.exchangerate-api.com)), gardé en mémoire pour le mode hors ligne.
 - **Taxes** : lues dans [`taxes.json`](taxes.json). Pour mettre à jour un taux, modifiez ce fichier et poussez sur `main` : tous les téléphones l'auront à la prochaine ouverture.
@@ -11,6 +11,8 @@ Appli web installable (PWA) pour Android : elle convertit un prix affiché à Ne
 - **Scan caméra** : lecture d’une étiquette de prix par OCR ([Tesseract.js](https://tesseract.projectnaptha.com), Apache-2.0, embarqué dans `vendor/tesseract` : fonctionne hors ligne).
 - **Sauvegarde** : dans « Mes paniers », Exporter (fichier JSON partagé ou téléchargé) et Importer (fichier ou texte collé) ; l’import ajoute les paniers sans écraser l’existant.
 - **Clavier maison** : AZERTY givré pour les champs texte, accents par appui long, suggestions, correction automatique à l'espace (annulable) et apprentissage ; dictionnaire FR/EN dérivé de [wordfreq](https://github.com/rspeer/wordfreq) (CC BY-SA 4.0, voir `dict/LICENSE.txt`).
+- **Bandeau fixe** sur toutes les pages : « New York » en gothique, menu, date, cours et heures (police inspirée de la signalétique du métro, Archivo Narrow, OFL) ; titre de chaque page en gothique.
+- **Hôtel** : prix d’une nuit et nombre de nuits, + 14,75 % de taxes et 3,50 $ par nuit. **Calculatrice** simple (+ − × ÷ %).
 - **Navigation** : menu ☰ de l’écran principal (Panier, Mes paniers, Applis utiles, Réglages) ; passer d’un écran à l’autre (Accueil, Applis utiles, Panier, Mes paniers, Réglages) en faisant glisser le doigt, dans l’ordre choisi dans les Réglages ; bouton ⓘ sur chaque appli (à quoi elle sert) et sur la page Réglages.
 - **Applis utiles** : raccourcis vers une sélection d’applis pour New York (Google Maps, Citymapper, MTA, Uber, Lyft, Curb, Citi Bike, NYC Ferry, Traduction, Google Wallet, Wise, Yelp, OpenTable, TodayTix), choisies et ordonnées dans les Réglages (les non installées passent à la fin), plus ses propres applis choisies parmi celles du téléphone ; dans l’APK, icônes officielles lues sur le téléphone, appli non installée grisée menant au Play Store ([@capacitor/app-launcher](https://capacitorjs.com/docs/apis/app-launcher)).
 - **Fonds d'écran** : 8 photos de New York générées avec Magnific (Central Park, taxis, Brooklyn Bridge, Empire State, Statue de la Liberté, Radio City, Times Square, promenade de Brooklyn), au choix dans les Réglages, en aléatoire ou avec changement automatique, affichées à 100 %, ou jusqu’à 5 photos du téléphone (« Ma photo »), cadrées au doigt (glisser, pincer) et recadrables ensuite ; couleurs adaptées à la photo, intensité du givré réglable, ou givré animé (toutes les x s, de y à z en d s, puis retour).

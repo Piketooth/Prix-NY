@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE = 'prix-ny-v24';
+const CACHE = 'prix-ny-v25';
 const SHELL = [
   './',
   'index.html',
@@ -15,6 +15,7 @@ const SHELL = [
   'icons/mark-128.png',
   'sounds/baseball.mp3',
   'fonts/manufacturing-consent-latin-400-normal.woff2',
+  'fonts/archivo-narrow-latin-700-normal.woff2',
   'fonts/darker-grotesque-latin-500-normal.woff2',
   'fonts/darker-grotesque-latin-600-normal.woff2',
   'fonts/darker-grotesque-latin-700-normal.woff2',
