@@ -70,7 +70,9 @@ const state = {
     customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
     hideMissing: false, // masquer les applis non installées (APK)
     // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour
-    frostAnim: { on: false, every: 20, from: 25, to: 0, dur: 2 } },
+    frostAnim: { on: false, every: 20, from: 25, to: 0, dur: 2 },
+    tint: null, // teinte du givré (#rrggbb) ; null = neutre
+    glow: 100 }, // ombres et lueurs : 100 % = dosage automatique
 };
 
 const store = {
@@ -356,7 +358,7 @@ function step(delta) {
 // Titre du bandeau : la plus grande taille (40 px max) qui tient sur une ligne entre le logo et le bouton Réglages.
 function fitTitle() {
   const el = document.querySelector('.mast-title');
-  if (!el) return;
+  if (!el || $('masthead').classList.contains('collapsed')) return;
   el.style.fontSize = '40px';
   const ratio = el.clientWidth / el.scrollWidth;
   if (ratio < 1) el.style.fontSize = `${Math.floor(40 * ratio * 0.97 * 10) / 10}px`;
@@ -439,22 +441,115 @@ function renderClocks() {
   const now = new Date();
   const time = (tz) => now.toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const { label, tz } = state.settings.clock;
-  $('clock-ny').textContent = `New York ${time(NY_TZ)}`;
+  const wNy = weatherText('ny');
+  $('clock-ny').textContent = `New York ${time(NY_TZ)}${wNy ? ` · ${wNy}` : ''}`;
+  $('mini-time').textContent = `NY ${time(NY_TZ)}${wNy ? ` · ${wNy}` : ''}`;
   if (tz === NY_TZ) { $('clock-home').textContent = ''; return; }
   const diff = (tzOffset(tz, now) - tzOffset(NY_TZ, now)) / 60;
   const sign = diff >= 0 ? '+' : '−';
   const h = Math.abs(diff).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  $('clock-home').textContent = `${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}`;
+  const wHome = weatherText('home');
+  $('clock-home').textContent = `${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}${wHome ? ` · ${wHome}` : ''}`;
+}
+
+// --- Météo (Open-Meteo, gratuit, sans clé) : température et pictogramme à côté des horloges -----
+
+const NY_COORDS = { lat: 40.7128, lon: -74.006 };
+const weather = { ny: null, home: null, at: 0 };
+
+function weatherIcon(code, day) {
+  if (code === 0) return day ? '☀️' : '🌙';
+  if (code <= 2) return day ? '🌤️' : '☁️';
+  if (code === 3) return '☁️';
+  if (code <= 48) return '🌫️';
+  if (code <= 57) return '🌦️';
+  if (code <= 67 || (code >= 80 && code <= 82)) return '🌧️';
+  if (code <= 77 || code === 85 || code === 86) return '🌨️';
+  return '⛈️';
+}
+const weatherText = (k) => (weather[k] ? `${weatherIcon(weather[k].code, weather[k].day)} ${Math.round(weather[k].temp)}°` : '');
+
+async function fetchWeather({ lat, lon }) {
+  const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&timezone=auto`);
+  return { temp: d.current.temperature_2m, code: d.current.weather_code, day: d.current.is_day === 1 };
+}
+
+// Coordonnées de la deuxième ville : mémorisées (position, recherche) ou trouvées par son nom.
+async function homeCoords() {
+  const c = state.settings.clock;
+  if (Number.isFinite(c.lat) && Number.isFinite(c.lon)) return c;
+  const name = c.label.replace(/\s*\(.*\)$/, '');
+  const d = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=fr`);
+  const r = d.results?.[0];
+  if (!r) throw new Error('ville inconnue');
+  Object.assign(c, { lat: r.latitude, lon: r.longitude });
+  store.set('settings', state.settings);
+  return c;
+}
+
+async function loadWeather() {
+  weather.at = Date.now();
+  try { weather.ny = await fetchWeather(NY_COORDS); } catch { /* hors ligne */ }
+  if (state.settings.clock.tz !== NY_TZ) {
+    try { weather.home = await fetchWeather(await homeCoords()); } catch { weather.home = null; }
+  }
+  renderClocks();
+}
+
+// --- Bandeau repliable ---------------------------------------------------------
+
+function setMast(open) {
+  const head = $('masthead');
+  if (open === !head.classList.contains('collapsed')) return;
+  head.classList.toggle('collapsed', !open);
+  $('mast-toggle').setAttribute('aria-expanded', String(open));
+  if (open) requestAnimationFrame(fitTitle);
+}
+
+function initMast() {
+  const toggle = () => { setMast($('masthead').classList.contains('collapsed')); haptic(); };
+  $('mast-toggle').addEventListener('click', toggle);
+  $('mast-toggle').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  // Tirer la barre vers le bas la déplie, vers le haut la replie
+  let y0 = null;
+  $('masthead').addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true });
+  $('masthead').addEventListener('touchend', (e) => {
+    if (y0 == null) return;
+    const dy = e.changedTouches[0].clientY - y0;
+    y0 = null;
+    if (dy > 30) setMast(true); else if (dy < -30) setMast(false);
+  });
+  // Repliée dès qu'on fait défiler une page ou qu'on touche ailleurs
+  document.addEventListener('scroll', () => setMast(false), { capture: true, passive: true });
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#masthead')) setMast(false); });
+  // Raccourcis réseau (APK) : panneau rapide Internet d'Android et réglage d'itinérance
+  if (IS_NATIVE) {
+    $('mast-tools').hidden = false;
+    const open = (...actions) => async () => {
+      haptic();
+      for (const url of actions) {
+        try { const r = await window.Capacitor.nativePromise('AppLauncher', 'openUrl', { url }); if (r?.completed) return; } catch { /* suivant */ }
+      }
+      toast('Réglage indisponible sur ce téléphone');
+    };
+    $('net-panel').addEventListener('click', open('android.settings.panel.action.INTERNET_CONNECTIVITY', 'android.settings.WIRELESS_SETTINGS'));
+    $('net-roaming').addEventListener('click', open('android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
+  }
 }
 
 function startClocks() {
   renderClocks();
+  loadWeather();
+  setInterval(() => { if (document.visibilityState === 'visible') loadWeather(); }, 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - weather.at > 30 * 60 * 1000) loadWeather(); });
   // Recalée sur le début de chaque minute.
   setTimeout(() => { renderClocks(); setInterval(renderClocks, 60000); }, 60000 - (Date.now() % 60000) + 50);
 }
 
 function setClockCity(c) {
-  state.settings.clock = { label: c.label, tz: c.tz };
+  state.settings.clock = { label: c.label, tz: c.tz, ...(Number.isFinite(c.lat) ? { lat: c.lat, lon: c.lon } : {}) };
+  weather.home = null;
+  setTimeout(loadWeather, 0);
   store.set('settings', state.settings);
   $('set-city').value = c.label;
   $('city-suggest').replaceChildren();
@@ -493,7 +588,7 @@ async function cityByLocation() {
     const name = geo.city || geo.locality;
     if (!name) throw new Error('ville inconnue');
     const known = cities().find((c) => c.key === normCity(name));
-    setClockCity({ label: name, tz: known?.tz || tz });
+    setClockCity({ label: name, tz: known?.tz || tz, lat: latitude, lon: longitude });
     haptic('success');
   } catch (e) {
     if (e?.code === 1) { // PERMISSION_DENIED
@@ -562,6 +657,7 @@ function renderRateInfo(offline) {
   if (state.settings.rate) {
     const r = state.settings.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
     el.textContent = `1 $ = ${r} € · perso${feeShort}`;
+    $('mini-rate').textContent = `1 $ = ${r} €`;
     el.title = `Taux personnalisé : 1 $ = ${r} €${fee}`;
     return;
   }
@@ -573,6 +669,7 @@ function renderRateInfo(offline) {
   const rate = fx.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
   const d = new Date(fx.date + 'T12:00:00');
   el.textContent = `1 $ = ${rate} € · ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}${feeShort}${offline ? ' · hors ligne' : ''}`;
+  $('mini-rate').textContent = `1 $ = ${rate} €`;
   el.title = `Taux de référence ${fx.source} du ${d.toLocaleDateString('fr-FR')}${fee}${offline ? ' (hors ligne)' : ''}`;
 }
 
@@ -1499,12 +1596,14 @@ function initSettings() {
     const custom = state.settings.customApps.map((c) => `c:${c.pkg}`);
     const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
     state.settings.apps = [...apps, ...custom.filter((id) => !apps.includes(id))];
+    if (/^#[0-9a-f]{6}$/i.test(s.tint || '')) state.settings.tint = s.tint;
+    if (Number.isFinite(s.glow)) state.settings.glow = Math.min(200, Math.max(0, s.glow));
     if (s.frostAnim) {
       const f = s.frostAnim, num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
       state.settings.frostAnim = { on: !!f.on, every: num(f.every, 5, 300, 20), from: num(f.from, 0, 100, 30), to: num(f.to, 0, 100, 90), dur: num(f.dur, 1, 60, 4) };
     }
     if (s.clock?.tz && s.clock?.label) {
-      try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz }; } catch { /* fuseau inconnu */ }
+      try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz, ...(Number.isFinite(s.clock.lat) ? { lat: s.clock.lat, lon: s.clock.lon } : {}) }; } catch { /* fuseau inconnu */ }
     }
   }
   $('set-rate').value = state.settings.rate ? String(state.settings.rate).replace('.', ',') : '';
@@ -1776,7 +1875,8 @@ function menuGo(screen) {
 // Hauteur du bandeau fixe : les écrans commencent juste en dessous.
 function trackMastHeight() {
   const head = document.querySelector('header.masthead');
-  const set = () => document.documentElement.style.setProperty('--mast-h', `${Math.ceil(head.getBoundingClientRect().height)}px`);
+  // Seule la barre repliée décale les pages ; dépliée, le bandeau passe par-dessus le contenu.
+  const set = () => { if (head.classList.contains('collapsed')) document.documentElement.style.setProperty('--mast-h', `${Math.ceil(head.getBoundingClientRect().height)}px`); };
   set();
   new ResizeObserver(set).observe(head);
 }
@@ -2610,6 +2710,40 @@ function renderFrostAnim() {
     + ' L’animation s’arrête quand l’appli est en arrière-plan.';
 }
 
+// Teinte du verre : neutre (couleurs du thème) ou couleur choisie au nuancier.
+function applyTint() {
+  const root = document.documentElement.style;
+  const t = state.settings.tint;
+  if (t) {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(t.slice(i, i + 2), 16));
+    root.setProperty('--glass', `rgba(${r}, ${g}, ${b}, var(--glass-a))`);
+    root.setProperty('--tint', t);
+  } else {
+    root.removeProperty('--glass');
+  }
+  $('tint-neutral').setAttribute('aria-checked', String(!t));
+  $('tint-custom').setAttribute('aria-checked', String(!!t));
+  $('tint-neutral').classList.toggle('on', !t);
+  $('tint-custom').classList.toggle('on', !!t);
+}
+
+function applyGlow() {
+  document.documentElement.style.setProperty('--glow', (state.settings.glow / 100).toFixed(2));
+  $('set-glow-v').textContent = `${state.settings.glow} %`;
+}
+
+function initTintGlow() {
+  if (state.settings.tint) $('tint-color').value = state.settings.tint;
+  applyTint();
+  $('tint-neutral').addEventListener('click', () => { state.settings.tint = null; store.set('settings', state.settings); applyTint(); haptic(); });
+  $('tint-color').addEventListener('input', () => { state.settings.tint = $('tint-color').value; applyTint(); });
+  $('tint-color').addEventListener('change', () => { state.settings.tint = $('tint-color').value; store.set('settings', state.settings); applyTint(); haptic(); });
+  $('set-glow').value = state.settings.glow;
+  applyGlow();
+  $('set-glow').addEventListener('input', () => { state.settings.glow = Number($('set-glow').value); applyGlow(); });
+  $('set-glow').addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
+}
+
 function initFrostAnim() {
   renderFrostAnim();
   // Économie de batterie : pas d'animation quand l'appli n'est pas à l'écran.
@@ -3093,6 +3227,7 @@ function init() {
     if (!$('main-menu').hidden && openViews.at(-1)?.id === 'main-menu' && !e.target.closest('#main-menu, #menu-open')) history.back();
   });
   trackMastHeight();
+  initMast();
   initCalc();
   initBackButton();
   initInfoDialog();
@@ -3103,6 +3238,7 @@ function init() {
     haptic();
   });
   initFrostAnim();
+  initTintGlow();
   $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
   // Retour dans l'appli : une appli a peut-être été installée entre-temps.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('apps-view').hidden) renderApps(); });

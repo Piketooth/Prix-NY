@@ -28,13 +28,18 @@
   <!-- Fond d'écran (photo) : deux calques pour le fondu enchaîné -->
   <div class="wallpaper" aria-hidden="true"><div id="wp-a" class="wp-layer"></div><div id="wp-b" class="wp-layer"></div></div>
 
-  <header class="masthead">
+  <header id="masthead" class="masthead collapsed">
     <div class="mast-top">
       <img class="brand-mark" src="icons/mark-128.png" alt="" width="44" height="44">
-      <h1 class="mast-title">New York</h1>
+      <div id="mast-toggle" class="mast-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="mast-more" aria-label="Afficher ou masquer le détail du bandeau">
+        <h1 class="mast-title">New York</h1>
+        <span class="mast-mini" aria-hidden="true"><span id="mini-time"></span><span id="mini-rate"></span></span>
+        <span class="mast-chevron" aria-hidden="true"></span>
+      </div>
       <button id="menu-open" class="round-btn small" type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div id="main-menu" class="main-menu" role="menu" hidden></div>
     </div>
+    <div id="mast-more" class="mast-more">
     <div class="mast-rule"></div>
     <p class="mast-edition">
       <span id="mast-date"></span>
@@ -44,6 +49,11 @@
       <span id="clock-ny"></span>
       <span id="clock-home"></span>
     </p>
+    <div id="mast-tools" class="mast-tools" hidden>
+      <button id="net-panel" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg><span>Wi-Fi et données</span></button>
+      <button id="net-roaming" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Itinérance</span></button>
+    </div>
+    </div>
     <div class="mast-rule double"></div>
   </header>
 
@@ -144,12 +154,12 @@
     <div class="sheet-head">
       <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
       <h2>Panier en cours</h2>
-      <button id="cart-share" class="round-btn" type="button" aria-label="Partager le panier" title="Partager"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg></button>
-      <button id="saved-open" class="pill-btn" type="button" aria-label="Mes paniers"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span id="saved-count" class="pill-count"></span></button>
     </div>
     <div class="cart-name-row">
       <button id="cart-title" class="title-btn cart-name-btn" type="button" aria-label="Renommer le panier">Sans nom</button>
       <button id="cart-clear" class="btn secondary small" type="button">Réinitialiser</button>
+      <button id="cart-share" class="round-btn small" type="button" aria-label="Partager le panier" title="Partager"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg></button>
+      <button id="saved-open" class="pill-btn" type="button" aria-label="Mes paniers"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg><span id="saved-count" class="pill-count"></span></button>
     </div>
     <div id="cat-summary" class="cat-summary"></div>
     <ol id="cart-list" class="cart-list"></ol>
@@ -351,6 +361,19 @@
           <label class="anim-row"><span>Répéter toutes les</span><input id="fa-every" class="range" type="range" min="5" max="120" step="5"><b id="fa-every-v"></b></label>
           <p id="fa-note" class="note"></p>
         </div>
+        <span class="label">Teinte du givré</span>
+        <div class="chips tint-row" role="radiogroup" aria-label="Teinte du givré">
+          <button id="tint-neutral" class="chip" type="button" role="radio">Neutre</button>
+          <label id="tint-custom" class="chip tint-pick" role="radio"><span id="tint-swatch" class="tint-swatch" aria-hidden="true"></span>Couleur…<input id="tint-color" type="color" value="#ffb734" aria-label="Choisir la teinte du givré"></label>
+        </div>
+        <p class="note">Neutre : verre blanc ou anthracite selon le thème. Couleur : n’importe quelle teinte du nuancier, l’intensité reste celle du givré.</p>
+        <label for="set-glow" class="label">Ombres et lueurs</label>
+        <div class="range-row">
+          <span class="muted">0 %</span>
+          <input id="set-glow" class="range" type="range" min="0" max="200" step="10">
+          <b id="set-glow-v" class="range-val"></b>
+        </div>
+        <p class="note">Halo derrière les textes et les icônes pour les détacher de la photo. Dosé automatiquement selon le givré (plus le givré est faible, plus le halo est marqué) ; 100 % = automatique, montez ou baissez à votre goût.</p>
         <div id="wp-interval-box">
           <span class="label">Changement automatique (aléatoire)</span>
           <div id="wp-interval" class="chips" role="radiogroup" aria-label="Délai de changement"></div>

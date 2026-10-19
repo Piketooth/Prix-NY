@@ -6,6 +6,7 @@ const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, colorSch
 await ctx.addInitScript(() => { try { sessionStorage.setItem('splash', '1'); if (!localStorage.getItem('s6')) { localStorage.setItem('s6', '1'); localStorage.setItem('settings', JSON.stringify({ wallpaper: 'none' })); } } catch {} });
 const p = await ctx.newPage();
 const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && !/net::|Failed to load|404/.test(m.text()) && errs.push(m.text()));
+await p.route(/open-meteo\.com/, (r) => r.abort());
 await p.route('https://api.frankfurter.dev/**', r => r.fulfill({ json: { amount: 1, base: 'USD', date: '2026-10-16', rates: { EUR: 0.9 } } }));
 await p.route('https://open.er-api.com/**', r => r.abort());
 await p.goto('http://localhost:8765/');
