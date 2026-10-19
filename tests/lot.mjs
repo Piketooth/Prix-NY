@@ -7,6 +7,7 @@ const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, colorSch
 await ctx.addInitScript(() => { sessionStorage.setItem('splash', '1'); if (!localStorage.getItem('s11')) { localStorage.setItem('s11', '1'); localStorage.setItem('settings', JSON.stringify({ wallpaper: 'none' })); } });
 const p = await ctx.newPage();
 const errs = []; p.on('pageerror', e => errs.push(e.message));
+await p.route(/open-meteo\.com/, (r) => r.abort());
 await p.route('https://api.frankfurter.dev/**', r => r.fulfill({ json: { amount: 1, base: 'USD', date: '2026-10-16', rates: { EUR: 0.9 } } }));
 await p.route('https://open.er-api.com/**', r => r.abort());
 await p.goto('http://localhost:8765/');
@@ -26,6 +27,10 @@ ok('menu disponible sur la page', await p.isVisible('#menu-open'));
 const groups = await p.$$eval('.settings-group', (l) => l.map((x) => x.textContent));
 ok(`rubriques: ${groups.join(', ')}`, groups.join() === 'Argent,Heure,Saisie,Navigation,Apparence');
 ok(`givré en %: ${await p.textContent('#set-frost-v')}`, /^\d+ %$/.test(await p.textContent('#set-frost-v')));
+// Flou et opacité indépendants
+await p.fill('#set-opacity', '30'); await p.fill('#set-frost', '100'); await p.waitForTimeout(100);
+const glass = await p.evaluate(() => { const c = getComputedStyle(document.documentElement); return [c.getPropertyValue('--glass-a').trim(), c.getPropertyValue('--blur').trim(), state.settings.opacity]; });
+ok(`flou et opacité séparés: ${glass}`, Number(glass[0]) === 0.3 && glass[1] === '28px' && glass[2] === 30);
 // Bulles ⓘ : croix en haut à gauche, toucher en dehors
 await p.click('#settings-info'); await p.waitForTimeout(250);
 ok('pas de bouton Compris', !(await p.$('#info-dialog .btn')));
@@ -53,7 +58,7 @@ ok('retour : accueil', (await p.evaluate(() => openViews.length)) === 0);
 await p.click('#price'); await keys('49,99'); await p.waitForTimeout(400);
 const pm = await p.evaluate(() => ({ cls: document.body.classList.contains('price-mode'), main: getComputedStyle(document.querySelector('main')).opacity, usd: document.getElementById('pf-usd').textContent, eur: document.getElementById('pf-eur').textContent }));
 ok(`mode saisie: ${JSON.stringify(pm)}`, pm.cls && pm.main === '0' && pm.usd === '$49,99' && pm.eur.replace(/\s/g, ' ') === '48,98 €');
-await p.evaluate(() => onBackButton()); await p.waitForTimeout(400);
+await p.evaluate(() => onBackButton()); await p.waitForTimeout(800);
 ok('retour : pavé fermé, accueil réaffiché', !(await p.isVisible('#keypad')) && (await p.evaluate(() => getComputedStyle(document.querySelector('main')).opacity)) === '1');
 
 // Hôtel : 200 $ la nuit, 3 nuits → 600 + 14,75 % + 3 × 3,50 = 699,00 $

@@ -181,8 +181,16 @@ body.has-wp::before, body.has-wp::after { opacity: 0; }
 /* Contraste garanti : plus le givré est faible, plus le halo derrière le texte est marqué (--halo, 0 à 1). */
 body.has-wp header, body.has-wp .card, body.has-wp .hero, body.has-wp .item, body.has-wp .saved, body.has-wp .sheet,
 body.has-wp .sheet-head, body.has-wp .sheet-foot, body.has-wp .cart-bar, body.has-wp .app-tile {
-  text-shadow: 0 1px 3px var(--ts), 0 0 calc(var(--halo, 0) * 10px) var(--ts), 0 0 calc(var(--halo, 0) * 3px) var(--ts);
+  text-shadow: 0 1px calc(var(--glow, 1) * 3px) var(--ts), 0 0 calc(var(--halo, 0) * var(--glow, 1) * 10px) var(--ts), 0 0 calc(var(--halo, 0) * var(--glow, 1) * 3px) var(--ts);
 }
+/* Icônes et pictogrammes : même lueur que le texte */
+body.has-wp header svg, body.has-wp .sheet-head svg, body.has-wp .brand-mark, body.has-wp .cat, body.has-wp .info-i {
+  filter: drop-shadow(0 0 calc((.3 + var(--halo, 0)) * var(--glow, 1) * 4px) var(--ts));
+}
+.tint-row { align-items: center; }
+.tint-pick { position: relative; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.tint-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.tint-swatch { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); background: var(--tint, #ffb734); }
 
 /* En-tête */
 header {
@@ -233,7 +241,7 @@ h1 { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: -.5px; }
 /* Saisie */
 .input-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 2px; }
 .price-row { display: flex; align-items: center; gap: 6px; }
-.prefix { font-size: 44px; font-weight: 800; color: var(--slate); }
+.prefix { font-size: 44px; font-weight: 800; color: var(--text); } /* même couleur que le montant, lisible sur photo */
 #price {
   flex: 1;
   min-width: 0;
@@ -918,7 +926,8 @@ body.no-scroll { overflow: hidden; }
 .settings-group:first-child { margin-top: 2px; }
 .cart-name-row { display: flex; align-items: center; gap: 10px; margin: -4px 0 10px; }
 .cart-name-btn { flex: 1; font-size: 22px; font-weight: 800; }
-.cart-name-row .btn { flex: none; width: auto; padding: 8px 14px; font-size: 16px; }
+.cart-name-row .btn { flex: none; width: auto; padding: 8px 12px; font-size: 16px; }
+.cart-name-row .round-btn, .cart-name-row .pill-btn { flex: none; }
 
 /* Calculatrice */
 .calc-screen { text-align: right; padding: 16px 18px; min-height: 120px; display: grid; align-content: end; }
@@ -1500,6 +1509,57 @@ body { padding-top: calc(var(--mast-h, 150px) + 6px); }
 .cart-bar-wrap { top: var(--mast-h, 150px) !important; }
 .sheet { padding-top: var(--mast-h, 150px) !important; }
 .mast-top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 8px; }
+/* Bandeau repliable : barre fine (titre, heure de New York, cours) ou bandeau complet */
+.mast-toggle { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer; outline: none; }
+.mast-chevron { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid currentColor; opacity: .7; transition: transform .25s; flex: none; }
+.masthead:not(.collapsed) .mast-chevron { transform: rotate(180deg); }
+.mast-mini { display: none; flex-direction: column; align-items: flex-end; line-height: 1.1; font-family: "Archivo Narrow", sans-serif; font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.masthead.collapsed .mast-mini { display: flex; }
+.masthead.collapsed .mast-toggle { justify-content: space-between; }
+.masthead.collapsed .mast-title { font-size: 30px !important; flex: none; }
+.masthead.collapsed .brand-mark { width: 36px; height: 36px; }
+.masthead.collapsed .mast-top { grid-template-columns: 36px 1fr 42px; }
+.mast-more { overflow: hidden; max-height: 160px; transition: max-height .3s ease, opacity .25s ease; }
+.masthead.collapsed .mast-more { max-height: 0; opacity: 0; }
+.mast-tools { display: flex; gap: 8px; padding: 2px 0 6px; }
+.mast-tools[hidden] { display: none; }
+.mast-tool {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 6px 8px; border-radius: 12px; border: 1px solid var(--glass-edge);
+  background: var(--field); color: var(--text);
+  font: 700 14px "Archivo Narrow", sans-serif; letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
+}
+.mast-tool svg { color: var(--total); }
+.mini-line { display: flex; align-items: center; gap: 6px; }
+.wx-link { cursor: pointer; padding: 1px 6px; margin: -1px 0; border-radius: 999px; background: var(--field); border: 1px solid var(--glass-edge); }
+.wx-link[hidden] { display: none; }
+.mast-clocks .wx-link { margin-left: 4px; }
+
+/* Météo */
+.weather-scroll { flex: 1; overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.wx-city { display: flex; margin: 0 0 12px; }
+.wx-city label { flex: 1; text-align: center; }
+.wx-today { text-align: center; display: grid; justify-items: center; gap: 2px; padding: 20px 16px; }
+.wx-big { font-size: 84px; line-height: 1; }
+.wx-temp { font-size: 64px; font-weight: 900; line-height: 1; color: var(--total); font-variant-numeric: tabular-nums; }
+.wx-desc { font-size: 22px; font-weight: 800; }
+.wx-minmax { font-size: 18px; font-weight: 700; opacity: .85; }
+.wx-facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin-top: 12px; width: 100%; font-size: 16px; font-weight: 700; text-align: left; }
+.wx-facts span { opacity: .8; }
+.wx-week { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.wx-week li {
+  display: grid; grid-template-columns: 74px 36px 1fr auto; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 16px;
+  background: var(--glass); border: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(1.6); backdrop-filter: blur(var(--blur)) saturate(1.6);
+  font-size: 17px; font-weight: 800;
+}
+.wx-week .d { text-transform: capitalize; }
+.wx-week .i { font-size: 24px; text-align: center; }
+.wx-week .r { font-size: 14px; font-weight: 700; opacity: .75; }
+.wx-week .t { font-variant-numeric: tabular-nums; }
+.wx-week .t small { opacity: .65; font-weight: 700; margin-left: 6px; }
+body.has-wp .wx-week li { text-shadow: 0 1px calc(var(--glow, 1) * 3px) var(--ts), 0 0 calc(var(--halo, 0) * var(--glow, 1) * 10px) var(--ts); }
 .mast-title {
   margin: 0;
   text-align: center;

@@ -60,17 +60,20 @@ const state = {
   split: 1,
   // rate : taux personnalisé (null = cours officiel) ; sound : son au démarrage ; voiceLang : saisie vocale
   // wallpaper : id d'un fond, 'random' ou 'none' ; wpInterval : 'launch' ou délai en secondes
-  // adaptive : couleurs selon la photo ; frost : intensité du givré (0 aucun → 100 fort)
+  // adaptive : couleurs selon la photo ; frost : flou du givré, opacity : opacité des cartes (0 → 100 %)
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
-  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2,
+  settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, opacity: 64, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 3,
     // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
-    screens: ['main', 'apps', 'calc', 'cart', 'saved', 'settings'],
+    screens: ['main', 'apps', 'calc', 'cart', 'saved', 'weather', 'settings'],
     // apps : applis affichées, dans l'ordre choisi ; « c:paquet » pour celles ajoutées depuis le téléphone
     apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
     customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
     hideMissing: false, // masquer les applis non installées (APK)
-    // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour
-    frostAnim: { on: false, every: 20, from: 25, to: 0, dur: 2 } },
+    // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour ;
+    // niveaux en % des réglages Flou et Opacité (100 % = réglages, 0 % = cartes transparentes)
+    frostAnim: { on: false, every: 20, from: 100, to: 0, dur: 2 },
+    tint: null, // teinte du givré (#rrggbb) ; null = neutre
+    glow: 100 }, // ombres et lueurs : 100 % = dosage automatique
 };
 
 const store = {
@@ -356,7 +359,7 @@ function step(delta) {
 // Titre du bandeau : la plus grande taille (40 px max) qui tient sur une ligne entre le logo et le bouton Réglages.
 function fitTitle() {
   const el = document.querySelector('.mast-title');
-  if (!el) return;
+  if (!el || $('masthead').classList.contains('collapsed')) return;
   el.style.fontSize = '40px';
   const ratio = el.clientWidth / el.scrollWidth;
   if (ratio < 1) el.style.fontSize = `${Math.floor(40 * ratio * 0.97 * 10) / 10}px`;
@@ -439,22 +442,222 @@ function renderClocks() {
   const now = new Date();
   const time = (tz) => now.toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const { label, tz } = state.settings.clock;
-  $('clock-ny').textContent = `New York ${time(NY_TZ)}`;
+  const wNy = weatherText('ny');
+  // La météo est un lien vers la page Météo (ville correspondante)
+  const wx = (text, city) => {
+    const el = document.createElement('span');
+    el.className = 'wx-link';
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    el.dataset.city = city;
+    el.textContent = text;
+    return el;
+  };
+  $('clock-ny').replaceChildren(`New York ${time(NY_TZ)}`, ...(wNy ? [wx(wNy, 'ny')] : []));
+  $('mini-time').textContent = `NY ${time(NY_TZ)}`;
+  $('mini-weather').textContent = wNy;
+  $('mini-weather').hidden = !wNy;
   if (tz === NY_TZ) { $('clock-home').textContent = ''; return; }
   const diff = (tzOffset(tz, now) - tzOffset(NY_TZ, now)) / 60;
   const sign = diff >= 0 ? '+' : '−';
   const h = Math.abs(diff).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  $('clock-home').textContent = `${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}`;
+  const wHome = weatherText('home');
+  $('clock-home').replaceChildren(`${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}`, ...(wHome ? [wx(wHome, 'home')] : []));
+}
+
+// --- Météo (Open-Meteo, gratuit, sans clé) : température et pictogramme à côté des horloges -----
+
+const NY_COORDS = { lat: 40.7128, lon: -74.006 };
+const weather = { ny: null, home: null, at: 0 };
+
+function weatherIcon(code, day) {
+  if (code === 0) return day ? '☀️' : '🌙';
+  if (code <= 2) return day ? '🌤️' : '☁️';
+  if (code === 3) return '☁️';
+  if (code <= 48) return '🌫️';
+  if (code <= 57) return '🌦️';
+  if (code <= 67 || (code >= 80 && code <= 82)) return '🌧️';
+  if (code <= 77 || code === 85 || code === 86) return '🌨️';
+  return '⛈️';
+}
+const weatherText = (k) => (weather[k] ? `${weatherIcon(weather[k].code, weather[k].day)} ${Math.round(weather[k].temp)}°` : '');
+
+async function fetchWeather({ lat, lon }) {
+  const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&timezone=auto`);
+  return { temp: d.current.temperature_2m, code: d.current.weather_code, day: d.current.is_day === 1 };
+}
+
+// Coordonnées de la deuxième ville : mémorisées (position, recherche) ou trouvées par son nom.
+async function homeCoords() {
+  const c = state.settings.clock;
+  if (Number.isFinite(c.lat) && Number.isFinite(c.lon)) return c;
+  const name = c.label.replace(/\s*\(.*\)$/, '');
+  const d = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=fr`);
+  const r = d.results?.[0];
+  if (!r) throw new Error('ville inconnue');
+  Object.assign(c, { lat: r.latitude, lon: r.longitude });
+  store.set('settings', state.settings);
+  return c;
+}
+
+async function loadWeather() {
+  weather.at = Date.now();
+  try { weather.ny = await fetchWeather(NY_COORDS); } catch { /* hors ligne */ }
+  if (state.settings.clock.tz !== NY_TZ) {
+    try { weather.home = await fetchWeather(await homeCoords()); } catch { weather.home = null; }
+  }
+  renderClocks();
+}
+
+// --- Page Météo : aujourd'hui en grand, la semaine en dessous --------------------
+
+const WX_DESC = [[0, 'Ciel dégagé'], [1, 'Plutôt dégagé'], [2, 'Partiellement nuageux'], [3, 'Couvert'], [48, 'Brouillard'], [55, 'Bruine'], [57, 'Bruine verglaçante'],
+  [65, 'Pluie'], [67, 'Pluie verglaçante'], [75, 'Neige'], [77, 'Grains de neige'], [82, 'Averses'], [86, 'Averses de neige'], [99, 'Orage']];
+const wxDesc = (code) => (WX_DESC.find(([max]) => code <= max) || WX_DESC.at(-1))[1];
+const forecast = { city: 'ny', data: {} }; // data[city] = { at, d }
+
+async function fetchForecast(city) {
+  const cached = forecast.data[city];
+  if (cached && Date.now() - cached.at < 30 * 60 * 1000) return cached.d;
+  const { lat, lon } = city === 'ny' ? NY_COORDS : await homeCoords();
+  const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+    + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m'
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max'
+    + '&timezone=auto&forecast_days=7');
+  forecast.data[city] = { at: Date.now(), d };
+  return d;
+}
+
+async function renderWeather() {
+  const home = state.settings.clock.tz !== NY_TZ ? state.settings.clock.label : null;
+  if (!home) forecast.city = 'ny';
+  const seg = $('wx-city');
+  seg.replaceChildren(...[['ny', 'New York'], ...(home ? [['home', home]] : [])].map(([id, name]) => {
+    const l = document.createElement('label');
+    l.innerHTML = `<input type="radio" name="wx-city" value="${id}"><span></span>`;
+    l.querySelector('span').textContent = name;
+    const input = l.querySelector('input');
+    input.checked = forecast.city === id;
+    input.addEventListener('change', () => { forecast.city = id; renderWeather(); haptic(); });
+    return l;
+  }));
+  seg.hidden = !home;
+  const today = $('wx-today');
+  const week = $('wx-week');
+  let d;
+  try { d = await fetchForecast(forecast.city); } catch {
+    today.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Météo indisponible : vérifiez la connexion.' }));
+    week.replaceChildren();
+    return;
+  }
+  const c = d.current;
+  const dl = d.daily;
+  const el = (cls, text) => Object.assign(document.createElement('div'), { className: cls, textContent: text });
+  const facts = document.createElement('div');
+  facts.className = 'wx-facts';
+  facts.innerHTML = '<div><span>Ressenti</span> <b></b></div><div><span>Pluie</span> <b></b></div><div><span>Vent</span> <b></b></div><div><span>Humidité</span> <b></b></div>';
+  const [feel, rain, wind, hum] = facts.querySelectorAll('b');
+  feel.textContent = `${Math.round(c.apparent_temperature)}°`;
+  rain.textContent = `${dl.precipitation_probability_max[0] ?? 0} %`;
+  wind.textContent = `${Math.round(c.wind_speed_10m)} km/h`;
+  hum.textContent = `${Math.round(c.relative_humidity_2m)} %`;
+  today.replaceChildren(
+    el('wx-big', weatherIcon(c.weather_code, c.is_day === 1)),
+    el('wx-temp', `${Math.round(c.temperature_2m)}°`),
+    el('wx-desc', wxDesc(c.weather_code)),
+    el('wx-minmax', `min ${Math.round(dl.temperature_2m_min[0])}° · max ${Math.round(dl.temperature_2m_max[0])}°`),
+    facts,
+  );
+  week.replaceChildren(...dl.time.slice(1).map((day, k) => {
+    const i = k + 1;
+    const li = document.createElement('li');
+    const date = new Date(`${day}T12:00:00`);
+    li.innerHTML = '<span class="d"></span><span class="i"></span><span class="r"></span><span class="t"></span>';
+    li.querySelector('.d').textContent = i === 1 ? 'Demain' : date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+    li.querySelector('.i').textContent = weatherIcon(dl.weather_code[i], true);
+    li.querySelector('.r').textContent = `${wxDesc(dl.weather_code[i])} · 💧 ${dl.precipitation_probability_max[i] ?? 0} %`;
+    const t = li.querySelector('.t');
+    t.textContent = `${Math.round(dl.temperature_2m_max[i])}°`;
+    t.append(Object.assign(document.createElement('small'), { textContent: `${Math.round(dl.temperature_2m_min[i])}°` }));
+    return li;
+  }));
+}
+
+// Ouvre la page Météo sur la ville touchée (depuis le bandeau)
+function openWeather(city = 'ny') {
+  forecast.city = city;
+  setMast(false);
+  if (currentScreen() === 'weather') { renderWeather(); return; }
+  menuGo('weather');
+}
+
+// --- Bandeau repliable ---------------------------------------------------------
+
+function setMast(open) {
+  const head = $('masthead');
+  if (open === !head.classList.contains('collapsed')) return;
+  head.classList.toggle('collapsed', !open);
+  $('mast-toggle').setAttribute('aria-expanded', String(open));
+  if (open) requestAnimationFrame(fitTitle);
+}
+
+function initMast() {
+  const toggle = () => { setMast($('masthead').classList.contains('collapsed')); haptic(); };
+  // Toucher la météo ouvre la page Météo (sans déplier le bandeau)
+  $('masthead').addEventListener('click', (e) => {
+    const w = e.target.closest('.wx-link');
+    if (!w) return;
+    e.stopPropagation();
+    haptic();
+    openWeather(w.dataset.city || 'ny');
+  }, true);
+  $('masthead').addEventListener('keydown', (e) => {
+    const w = e.target.closest?.('.wx-link');
+    if (w && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); openWeather(w.dataset.city || 'ny'); }
+  }, true);
+  $('mast-toggle').addEventListener('click', toggle);
+  $('mast-toggle').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  // Tirer la barre vers le bas la déplie, vers le haut la replie
+  let y0 = null;
+  $('masthead').addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true });
+  $('masthead').addEventListener('touchend', (e) => {
+    if (y0 == null) return;
+    const dy = e.changedTouches[0].clientY - y0;
+    y0 = null;
+    if (dy > 30) setMast(true); else if (dy < -30) setMast(false);
+  });
+  // Repliée dès qu'on fait défiler une page ou qu'on touche ailleurs
+  document.addEventListener('scroll', () => setMast(false), { capture: true, passive: true });
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#masthead')) setMast(false); });
+  // Raccourcis réseau (APK) : panneau rapide Internet d'Android et réglage d'itinérance
+  if (IS_NATIVE) {
+    $('mast-tools').hidden = false;
+    const open = (...actions) => async () => {
+      haptic();
+      for (const url of actions) {
+        try { const r = await window.Capacitor.nativePromise('AppLauncher', 'openUrl', { url }); if (r?.completed) return; } catch { /* suivant */ }
+      }
+      toast('Réglage indisponible sur ce téléphone');
+    };
+    $('net-panel').addEventListener('click', open('android.settings.panel.action.INTERNET_CONNECTIVITY', 'android.settings.WIRELESS_SETTINGS'));
+    $('net-roaming').addEventListener('click', open('android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
+  }
 }
 
 function startClocks() {
   renderClocks();
+  loadWeather();
+  setInterval(() => { if (document.visibilityState === 'visible') loadWeather(); }, 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - weather.at > 30 * 60 * 1000) loadWeather(); });
   // Recalée sur le début de chaque minute.
   setTimeout(() => { renderClocks(); setInterval(renderClocks, 60000); }, 60000 - (Date.now() % 60000) + 50);
 }
 
 function setClockCity(c) {
-  state.settings.clock = { label: c.label, tz: c.tz };
+  state.settings.clock = { label: c.label, tz: c.tz, ...(Number.isFinite(c.lat) ? { lat: c.lat, lon: c.lon } : {}) };
+  weather.home = null;
+  delete forecast.data.home;
+  setTimeout(loadWeather, 0);
   store.set('settings', state.settings);
   $('set-city').value = c.label;
   $('city-suggest').replaceChildren();
@@ -493,7 +696,7 @@ async function cityByLocation() {
     const name = geo.city || geo.locality;
     if (!name) throw new Error('ville inconnue');
     const known = cities().find((c) => c.key === normCity(name));
-    setClockCity({ label: name, tz: known?.tz || tz });
+    setClockCity({ label: name, tz: known?.tz || tz, lat: latitude, lon: longitude });
     haptic('success');
   } catch (e) {
     if (e?.code === 1) { // PERMISSION_DENIED
@@ -562,6 +765,7 @@ function renderRateInfo(offline) {
   if (state.settings.rate) {
     const r = state.settings.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
     el.textContent = `1 $ = ${r} € · perso${feeShort}`;
+    $('mini-rate').textContent = `1 $ = ${r} €`;
     el.title = `Taux personnalisé : 1 $ = ${r} €${fee}`;
     return;
   }
@@ -573,6 +777,7 @@ function renderRateInfo(offline) {
   const rate = fx.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 });
   const d = new Date(fx.date + 'T12:00:00');
   el.textContent = `1 $ = ${rate} € · ${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}${feeShort}${offline ? ' · hors ligne' : ''}`;
+  $('mini-rate').textContent = `1 $ = ${rate} €`;
   el.title = `Taux de référence ${fx.source} du ${d.toLocaleDateString('fr-FR')}${fee}${offline ? ' (hors ligne)' : ''}`;
 }
 
@@ -1482,10 +1687,13 @@ function initSettings() {
     if (s.wallpaper === 'random' || s.wallpaper === 'none' || WALLPAPERS.some((w) => w.id === s.wallpaper) || /^custom-/.test(s.wallpaper || '')) state.settings.wallpaper = s.wallpaper;
     if (WP_INTERVALS.some((o) => o.v === s.wpInterval)) state.settings.wpInterval = s.wpInterval;
     if (s.adaptive === false) state.settings.adaptive = false;
+    const clamp = (v) => Math.min(100, Math.max(0, Math.round(v)));
     if (Number.isFinite(s.frost)) {
       // Ancienne échelle (0 = déjà 55 % d'opacité) : même rendu sur la nouvelle, qui part de 0.
-      const f = s.frostScale === 2 ? s.frost : Math.round((55 + 0.3 * s.frost) / 0.85);
-      state.settings.frost = Math.min(100, Math.max(0, f));
+      const f = s.frostScale >= 2 ? s.frost : Math.round((55 + 0.3 * s.frost) / 0.85);
+      state.settings.frost = clamp(f);
+      // Avant les deux curseurs, un seul réglage menait le flou et l'opacité (85 % au maximum).
+      state.settings.opacity = s.frostScale === 3 && Number.isFinite(s.opacity) ? clamp(s.opacity) : clamp(0.85 * state.settings.frost);
     }
     // Ancien ordre par défaut (Applis après Mes paniers) : nouvel ordre par défaut, Applis juste après l'accueil.
     if (Array.isArray(s.screens) && s.screens.join() !== 'main,cart,saved,apps,settings') {
@@ -1499,12 +1707,19 @@ function initSettings() {
     const custom = state.settings.customApps.map((c) => `c:${c.pkg}`);
     const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
     state.settings.apps = [...apps, ...custom.filter((id) => !apps.includes(id))];
+    if (/^#[0-9a-f]{6}$/i.test(s.tint || '')) state.settings.tint = s.tint;
+    if (Number.isFinite(s.glow)) state.settings.glow = Math.min(200, Math.max(0, s.glow));
     if (s.frostAnim) {
       const f = s.frostAnim, num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
-      state.settings.frostAnim = { on: !!f.on, every: num(f.every, 5, 300, 20), from: num(f.from, 0, 100, 30), to: num(f.to, 0, 100, 90), dur: num(f.dur, 1, 60, 4) };
+      state.settings.frostAnim = { on: !!f.on, every: num(f.every, 5, 300, 20), from: num(f.from, 0, 100, 100), to: num(f.to, 0, 100, 0), dur: num(f.dur, 1, 60, 2) };
+      // Anciens niveaux absolus : convertis en % des réglages, pour garder le même rendu.
+      if (s.frostScale !== 3) {
+        const base = state.settings.frost || 100, a = state.settings.frostAnim;
+        a.from = clamp(a.from * 100 / base); a.to = clamp(a.to * 100 / base);
+      }
     }
     if (s.clock?.tz && s.clock?.label) {
-      try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz }; } catch { /* fuseau inconnu */ }
+      try { new Intl.DateTimeFormat('fr-FR', { timeZone: s.clock.tz }); state.settings.clock = { label: s.clock.label, tz: s.clock.tz, ...(Number.isFinite(s.clock.lat) ? { lat: s.clock.lat, lon: s.clock.lon } : {}) }; } catch { /* fuseau inconnu */ }
     }
   }
   $('set-rate').value = state.settings.rate ? String(state.settings.rate).replace('.', ',') : '';
@@ -1527,14 +1742,16 @@ function initSettings() {
     applyTheme();
     haptic();
   });
-  $('set-frost').value = state.settings.frost;
-  $('set-frost-v').textContent = `${state.settings.frost} %`;
-  $('set-frost').addEventListener('input', () => {
-    state.settings.frost = Number($('set-frost').value);
-    $('set-frost-v').textContent = `${state.settings.frost} %`;
-    applyFrost();
-  });
-  $('set-frost').addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
+  for (const [id, k] of [['set-frost', 'frost'], ['set-opacity', 'opacity']]) {
+    $(id).value = state.settings[k];
+    $(`${id}-v`).textContent = `${state.settings[k]} %`;
+    $(id).addEventListener('input', () => {
+      state.settings[k] = Number($(id).value);
+      $(`${id}-v`).textContent = `${state.settings[k]} %`;
+      applyFrost();
+    });
+    $(id).addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
+  }
   applyFrost();
   $('opt-sound').checked = state.settings.sound;
   $('opt-sound').addEventListener('change', () => { state.settings.sound = $('opt-sound').checked; applySettings(); haptic(); });
@@ -1735,6 +1952,7 @@ const SCREENS = {
   calc: { label: 'Calculatrice', view: 'calc-view', icon: ICON('<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>') },
   cart: { label: 'Panier en cours', view: 'cart-view', icon: ICON('<path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/>') },
   saved: { label: 'Mes paniers', view: 'saved-view', icon: ICON('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>') },
+  weather: { label: 'Météo', view: 'weather-view', icon: ICON('<path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 9.5 4.25 4.25 0 0 0 7 18z"/>') },
   settings: { label: 'Réglages', view: 'settings-view', icon: ICON('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>') },
 };
 
@@ -1770,13 +1988,18 @@ function menuGo(screen) {
   const order = state.settings.screens;
   const dir = order.indexOf(screen) > order.indexOf(cur) ? 'next' : 'prev';
   if (cur) goScreen(screen, dir);
-  else if (SCREENS[screen].view) { openView(SCREENS[screen].view); if (screen === 'apps') renderApps(); }
+  else if (SCREENS[screen].view) {
+    openView(SCREENS[screen].view);
+    if (screen === 'apps') renderApps();
+    if (screen === 'weather') renderWeather();
+  }
 }
 
 // Hauteur du bandeau fixe : les écrans commencent juste en dessous.
 function trackMastHeight() {
   const head = document.querySelector('header.masthead');
-  const set = () => document.documentElement.style.setProperty('--mast-h', `${Math.ceil(head.getBoundingClientRect().height)}px`);
+  // Seule la barre repliée décale les pages ; dépliée, le bandeau passe par-dessus le contenu.
+  const set = () => { if (head.classList.contains('collapsed')) document.documentElement.style.setProperty('--mast-h', `${Math.ceil(head.getBoundingClientRect().height)}px`); };
   set();
   new ResizeObserver(set).observe(head);
 }
@@ -1840,6 +2063,7 @@ function goScreen(screen, dir) {
     $(view).scrollTop = 0;
     animateIn([$(view)], dir);
     if (screen === 'apps') renderApps();
+    if (screen === 'weather') renderWeather();
     if (screen === 'settings') checkApps([...APPS, ...state.settings.customApps.map(customApp)]).then(renderAppsChoice); // icônes du téléphone
   }
   syncCovered();
@@ -2566,13 +2790,14 @@ function applyTheme() {
   document.documentElement.classList.toggle('theme-light', tone === 'light');
 }
 
-// Givré : de 0 (cartes transparentes, sans flou) à 100 (opacité 85 %, flou 28 px), en « dur » secondes.
+// Givré : flou (0 → 28 px) et opacité (0 → 100 %) réglés à part ; v = % de ces réglages, atteint en « dur » s.
 function setFrostLevel(v, dur = 0) {
   const root = document.documentElement.style;
+  const alpha = state.settings.opacity / 100 * v / 100;
   root.transition = dur ? `--glass-a ${dur}s ease-in-out, --blur ${dur}s ease-in-out` : 'none';
-  root.setProperty('--glass-a', (0.85 * v / 100).toFixed(3));
-  root.setProperty('--blur', `${(28 * v / 100).toFixed(1)}px`);
-  root.setProperty('--halo', (Math.max(0, 60 - v) / 60).toFixed(2)); // halo du texte sous 60 % de givré
+  root.setProperty('--glass-a', alpha.toFixed(3));
+  root.setProperty('--blur', `${(28 * state.settings.frost / 100 * v / 100).toFixed(1)}px`);
+  root.setProperty('--halo', (Math.max(0, 0.5 - alpha) / 0.5).toFixed(2)); // halo du texte sous 50 % d'opacité
 }
 
 // Givré animé : toutes les « every » s, de « from » à « to » en « dur » s, puis retour à « from ».
@@ -2582,7 +2807,7 @@ function applyFrost() {
   clearInterval(frostTimer);
   clearTimeout(frostBack);
   const a = state.settings.frostAnim;
-  if (!a.on) { setFrostLevel(state.settings.frost); return; }
+  if (!a.on) { setFrostLevel(100); return; }
   setFrostLevel(a.from);
   const cycle = () => {
     setFrostLevel(a.to, a.dur);
@@ -2596,18 +2821,51 @@ function renderFrostAnim() {
   const a = state.settings.frostAnim;
   $('opt-frost-anim').checked = a.on;
   $('frost-anim-box').hidden = !a.on;
-  $('frost-fixed').hidden = a.on;
   for (const k of ['every', 'from', 'to', 'dur']) $(`fa-${k}`).value = a[k];
   $('fa-every-v').textContent = `${a.every} s`;
   $('fa-from-v').textContent = `${a.from} %`;
   $('fa-to-v').textContent = `${a.to} %`;
   $('fa-dur-v').textContent = `${a.dur} s`;
   const every = Math.max(a.every, 2 * a.dur + 1);
-  $('fa-note').textContent = `Le givré reste à ${a.from} %. Toutes les ${every} s, il passe à ${a.to} % en ${a.dur} s`
+  $('fa-note').textContent = `Le givré reste à ${a.from} % du flou et de l’opacité réglés. Toutes les ${every} s, il passe à ${a.to} % en ${a.dur} s`
     + (a.to < a.from ? ' (la photo apparaît mieux)' : a.to > a.from ? ' (les cartes se givrent davantage)' : '')
     + `, puis revient à ${a.from} % en ${a.dur} s.`
     + (every > a.every ? ' Délai allongé pour laisser le temps à l’aller-retour.' : '')
     + ' L’animation s’arrête quand l’appli est en arrière-plan.';
+}
+
+// Teinte du verre : neutre (couleurs du thème) ou couleur choisie au nuancier.
+function applyTint() {
+  const root = document.documentElement.style;
+  const t = state.settings.tint;
+  if (t) {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(t.slice(i, i + 2), 16));
+    root.setProperty('--glass', `rgba(${r}, ${g}, ${b}, var(--glass-a))`);
+    root.setProperty('--tint', t);
+  } else {
+    root.removeProperty('--glass');
+  }
+  $('tint-neutral').setAttribute('aria-checked', String(!t));
+  $('tint-custom').setAttribute('aria-checked', String(!!t));
+  $('tint-neutral').classList.toggle('on', !t);
+  $('tint-custom').classList.toggle('on', !!t);
+}
+
+function applyGlow() {
+  document.documentElement.style.setProperty('--glow', (state.settings.glow / 100).toFixed(2));
+  $('set-glow-v').textContent = `${state.settings.glow} %`;
+}
+
+function initTintGlow() {
+  if (state.settings.tint) $('tint-color').value = state.settings.tint;
+  applyTint();
+  $('tint-neutral').addEventListener('click', () => { state.settings.tint = null; store.set('settings', state.settings); applyTint(); haptic(); });
+  $('tint-color').addEventListener('input', () => { state.settings.tint = $('tint-color').value; applyTint(); });
+  $('tint-color').addEventListener('change', () => { state.settings.tint = $('tint-color').value; store.set('settings', state.settings); applyTint(); haptic(); });
+  $('set-glow').value = state.settings.glow;
+  applyGlow();
+  $('set-glow').addEventListener('input', () => { state.settings.glow = Number($('set-glow').value); applyGlow(); });
+  $('set-glow').addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
 }
 
 function initFrostAnim() {
@@ -3093,6 +3351,7 @@ function init() {
     if (!$('main-menu').hidden && openViews.at(-1)?.id === 'main-menu' && !e.target.closest('#main-menu, #menu-open')) history.back();
   });
   trackMastHeight();
+  initMast();
   initCalc();
   initBackButton();
   initInfoDialog();
@@ -3103,6 +3362,7 @@ function init() {
     haptic();
   });
   initFrostAnim();
+  initTintGlow();
   $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
   // Retour dans l'appli : une appli a peut-être été installée entre-temps.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !$('apps-view').hidden) renderApps(); });
