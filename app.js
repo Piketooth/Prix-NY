@@ -64,7 +64,7 @@ const state = {
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
   settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2,
     // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
-    screens: ['main', 'apps', 'calc', 'cart', 'saved', 'settings'],
+    screens: ['main', 'apps', 'calc', 'cart', 'saved', 'weather', 'settings'],
     // apps : applis affichées, dans l'ordre choisi ; « c:paquet » pour celles ajoutées depuis le téléphone
     apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
     customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
@@ -442,14 +442,26 @@ function renderClocks() {
   const time = (tz) => now.toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const { label, tz } = state.settings.clock;
   const wNy = weatherText('ny');
-  $('clock-ny').textContent = `New York ${time(NY_TZ)}${wNy ? ` · ${wNy}` : ''}`;
-  $('mini-time').textContent = `NY ${time(NY_TZ)}${wNy ? ` · ${wNy}` : ''}`;
+  // La météo est un lien vers la page Météo (ville correspondante)
+  const wx = (text, city) => {
+    const el = document.createElement('span');
+    el.className = 'wx-link';
+    el.setAttribute('role', 'button');
+    el.tabIndex = 0;
+    el.dataset.city = city;
+    el.textContent = text;
+    return el;
+  };
+  $('clock-ny').replaceChildren(`New York ${time(NY_TZ)}`, ...(wNy ? [wx(wNy, 'ny')] : []));
+  $('mini-time').textContent = `NY ${time(NY_TZ)}`;
+  $('mini-weather').textContent = wNy;
+  $('mini-weather').hidden = !wNy;
   if (tz === NY_TZ) { $('clock-home').textContent = ''; return; }
   const diff = (tzOffset(tz, now) - tzOffset(NY_TZ, now)) / 60;
   const sign = diff >= 0 ? '+' : '−';
   const h = Math.abs(diff).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
   const wHome = weatherText('home');
-  $('clock-home').textContent = `${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}${wHome ? ` · ${wHome}` : ''}`;
+  $('clock-home').replaceChildren(`${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}`, ...(wHome ? [wx(wHome, 'home')] : []));
 }
 
 // --- Météo (Open-Meteo, gratuit, sans clé) : température et pictogramme à côté des horloges -----
@@ -496,6 +508,88 @@ async function loadWeather() {
   renderClocks();
 }
 
+// --- Page Météo : aujourd'hui en grand, la semaine en dessous --------------------
+
+const WX_DESC = [[0, 'Ciel dégagé'], [1, 'Plutôt dégagé'], [2, 'Partiellement nuageux'], [3, 'Couvert'], [48, 'Brouillard'], [55, 'Bruine'], [57, 'Bruine verglaçante'],
+  [65, 'Pluie'], [67, 'Pluie verglaçante'], [75, 'Neige'], [77, 'Grains de neige'], [82, 'Averses'], [86, 'Averses de neige'], [99, 'Orage']];
+const wxDesc = (code) => (WX_DESC.find(([max]) => code <= max) || WX_DESC.at(-1))[1];
+const forecast = { city: 'ny', data: {} }; // data[city] = { at, d }
+
+async function fetchForecast(city) {
+  const cached = forecast.data[city];
+  if (cached && Date.now() - cached.at < 30 * 60 * 1000) return cached.d;
+  const { lat, lon } = city === 'ny' ? NY_COORDS : await homeCoords();
+  const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+    + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m'
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max'
+    + '&timezone=auto&forecast_days=7');
+  forecast.data[city] = { at: Date.now(), d };
+  return d;
+}
+
+async function renderWeather() {
+  const home = state.settings.clock.tz !== NY_TZ ? state.settings.clock.label : null;
+  if (!home) forecast.city = 'ny';
+  const seg = $('wx-city');
+  seg.replaceChildren(...[['ny', 'New York'], ...(home ? [['home', home]] : [])].map(([id, name]) => {
+    const l = document.createElement('label');
+    l.innerHTML = `<input type="radio" name="wx-city" value="${id}"><span></span>`;
+    l.querySelector('span').textContent = name;
+    const input = l.querySelector('input');
+    input.checked = forecast.city === id;
+    input.addEventListener('change', () => { forecast.city = id; renderWeather(); haptic(); });
+    return l;
+  }));
+  seg.hidden = !home;
+  const today = $('wx-today');
+  const week = $('wx-week');
+  let d;
+  try { d = await fetchForecast(forecast.city); } catch {
+    today.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Météo indisponible : vérifiez la connexion.' }));
+    week.replaceChildren();
+    return;
+  }
+  const c = d.current;
+  const dl = d.daily;
+  const el = (cls, text) => Object.assign(document.createElement('div'), { className: cls, textContent: text });
+  const facts = document.createElement('div');
+  facts.className = 'wx-facts';
+  facts.innerHTML = '<div><span>Ressenti</span> <b></b></div><div><span>Pluie</span> <b></b></div><div><span>Vent</span> <b></b></div><div><span>Humidité</span> <b></b></div>';
+  const [feel, rain, wind, hum] = facts.querySelectorAll('b');
+  feel.textContent = `${Math.round(c.apparent_temperature)}°`;
+  rain.textContent = `${dl.precipitation_probability_max[0] ?? 0} %`;
+  wind.textContent = `${Math.round(c.wind_speed_10m)} km/h`;
+  hum.textContent = `${Math.round(c.relative_humidity_2m)} %`;
+  today.replaceChildren(
+    el('wx-big', weatherIcon(c.weather_code, c.is_day === 1)),
+    el('wx-temp', `${Math.round(c.temperature_2m)}°`),
+    el('wx-desc', wxDesc(c.weather_code)),
+    el('wx-minmax', `min ${Math.round(dl.temperature_2m_min[0])}° · max ${Math.round(dl.temperature_2m_max[0])}°`),
+    facts,
+  );
+  week.replaceChildren(...dl.time.slice(1).map((day, k) => {
+    const i = k + 1;
+    const li = document.createElement('li');
+    const date = new Date(`${day}T12:00:00`);
+    li.innerHTML = '<span class="d"></span><span class="i"></span><span class="r"></span><span class="t"></span>';
+    li.querySelector('.d').textContent = i === 1 ? 'Demain' : date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+    li.querySelector('.i').textContent = weatherIcon(dl.weather_code[i], true);
+    li.querySelector('.r').textContent = `${wxDesc(dl.weather_code[i])} · 💧 ${dl.precipitation_probability_max[i] ?? 0} %`;
+    const t = li.querySelector('.t');
+    t.textContent = `${Math.round(dl.temperature_2m_max[i])}°`;
+    t.append(Object.assign(document.createElement('small'), { textContent: `${Math.round(dl.temperature_2m_min[i])}°` }));
+    return li;
+  }));
+}
+
+// Ouvre la page Météo sur la ville touchée (depuis le bandeau)
+function openWeather(city = 'ny') {
+  forecast.city = city;
+  setMast(false);
+  if (currentScreen() === 'weather') { renderWeather(); return; }
+  menuGo('weather');
+}
+
 // --- Bandeau repliable ---------------------------------------------------------
 
 function setMast(open) {
@@ -508,6 +602,18 @@ function setMast(open) {
 
 function initMast() {
   const toggle = () => { setMast($('masthead').classList.contains('collapsed')); haptic(); };
+  // Toucher la météo ouvre la page Météo (sans déplier le bandeau)
+  $('masthead').addEventListener('click', (e) => {
+    const w = e.target.closest('.wx-link');
+    if (!w) return;
+    e.stopPropagation();
+    haptic();
+    openWeather(w.dataset.city || 'ny');
+  }, true);
+  $('masthead').addEventListener('keydown', (e) => {
+    const w = e.target.closest?.('.wx-link');
+    if (w && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); openWeather(w.dataset.city || 'ny'); }
+  }, true);
   $('mast-toggle').addEventListener('click', toggle);
   $('mast-toggle').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   // Tirer la barre vers le bas la déplie, vers le haut la replie
@@ -549,6 +655,7 @@ function startClocks() {
 function setClockCity(c) {
   state.settings.clock = { label: c.label, tz: c.tz, ...(Number.isFinite(c.lat) ? { lat: c.lat, lon: c.lon } : {}) };
   weather.home = null;
+  delete forecast.data.home;
   setTimeout(loadWeather, 0);
   store.set('settings', state.settings);
   $('set-city').value = c.label;
@@ -1834,6 +1941,7 @@ const SCREENS = {
   calc: { label: 'Calculatrice', view: 'calc-view', icon: ICON('<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>') },
   cart: { label: 'Panier en cours', view: 'cart-view', icon: ICON('<path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/>') },
   saved: { label: 'Mes paniers', view: 'saved-view', icon: ICON('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>') },
+  weather: { label: 'Météo', view: 'weather-view', icon: ICON('<path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 9.5 4.25 4.25 0 0 0 7 18z"/>') },
   settings: { label: 'Réglages', view: 'settings-view', icon: ICON('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>') },
 };
 
@@ -1869,7 +1977,11 @@ function menuGo(screen) {
   const order = state.settings.screens;
   const dir = order.indexOf(screen) > order.indexOf(cur) ? 'next' : 'prev';
   if (cur) goScreen(screen, dir);
-  else if (SCREENS[screen].view) { openView(SCREENS[screen].view); if (screen === 'apps') renderApps(); }
+  else if (SCREENS[screen].view) {
+    openView(SCREENS[screen].view);
+    if (screen === 'apps') renderApps();
+    if (screen === 'weather') renderWeather();
+  }
 }
 
 // Hauteur du bandeau fixe : les écrans commencent juste en dessous.
@@ -1940,6 +2052,7 @@ function goScreen(screen, dir) {
     $(view).scrollTop = 0;
     animateIn([$(view)], dir);
     if (screen === 'apps') renderApps();
+    if (screen === 'weather') renderWeather();
     if (screen === 'settings') checkApps([...APPS, ...state.settings.customApps.map(customApp)]).then(renderAppsChoice); // icônes du téléphone
   }
   syncCovered();

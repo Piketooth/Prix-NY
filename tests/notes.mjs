@@ -13,7 +13,12 @@ await ctx.addInitScript(() => {
 const p = await ctx.newPage();
 const errs = []; p.on('pageerror', e => errs.push(e.message));
 let geo = 0;
-await p.route('https://api.open-meteo.com/**', (r) => { const ny = r.request().url().includes('40.71'); r.fulfill({ json: { current: { temperature_2m: ny ? 12.4 : 15.8, weather_code: ny ? 3 : 0, is_day: 1 } } }); });
+await p.route('https://api.open-meteo.com/**', (r) => {
+  const ny = r.request().url().includes('40.71');
+  const days = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'];
+  r.fulfill({ json: { current: { temperature_2m: ny ? 12.4 : 15.8, apparent_temperature: 10, relative_humidity_2m: 70, weather_code: ny ? 3 : 0, is_day: 1, wind_speed_10m: 18 },
+    daily: { time: days, weather_code: [3, 61, 80, 1, 0, 2, 95], temperature_2m_max: [15, 13, 12, 16, 18, 17, 14], temperature_2m_min: [9, 8, 7, 9, 11, 10, 8], precipitation_probability_max: [20, 80, 60, 10, 0, 5, 70], wind_speed_10m_max: [20, 25, 30, 15, 10, 12, 35] } } });
+});
 await p.route('https://geocoding-api.open-meteo.com/**', (r) => { geo++; r.fulfill({ json: { results: [{ latitude: 48.85, longitude: 2.35 }] } }); });
 await p.route('https://api.frankfurter.dev/**', r => r.fulfill({ json: { amount: 1, base: 'USD', date: '2026-10-16', rates: { EUR: 0.9 } } }));
 await p.route('https://open.er-api.com/**', r => r.abort());
@@ -25,7 +30,7 @@ const collapsed = () => p.evaluate(() => document.getElementById('masthead').cla
 
 // Bandeau replié au démarrage : titre, heure de New York (+ météo) et cours
 ok('replié au démarrage', await collapsed());
-ok(`barre fine: ${(await p.textContent('.mast-mini')).trim()}`, /^NY \d\d:\d\d · ☁️ 12°/.test(await p.textContent('#mini-time')) && (await p.textContent('#mini-rate')) === '1 $ = 0,9 €');
+ok(`barre fine: ${(await p.textContent('.mast-mini')).trim()}`, /^NY \d\d:\d\d$/.test(await p.textContent('#mini-time')) && (await p.textContent('#mini-weather')) === '☁️ 12°' && (await p.textContent('#mini-rate')) === '1 $ = 0,9 €');
 const h0 = await p.evaluate(() => document.getElementById('masthead').getBoundingClientRect().height);
 ok(`barre fine basse: ${Math.round(h0)} px`, h0 < 80);
 await p.click('#mast-toggle'); await p.waitForTimeout(400);
@@ -68,5 +73,15 @@ ok('retour au neutre', !(await p.evaluate(() => document.documentElement.style.g
 ok(`lueurs automatiques: ${await p.textContent('#set-glow-v')}`, (await p.textContent('#set-glow-v')) === '100 %');
 await p.$eval('#set-glow', (e) => { e.value = '160'; e.dispatchEvent(new Event('input', { bubbles: true })); });
 ok('lueurs renforcées', (await p.evaluate(() => document.documentElement.style.getPropertyValue('--glow'))) === '1.60');
+// Page Météo depuis l'icône du bandeau
+await p.goBack(); await p.waitForTimeout(300);
+ok('icône météo dans la barre', (await p.textContent('#mini-weather')) === '☁️ 12°');
+await p.click('#mini-weather'); await p.waitForTimeout(600);
+ok('page Météo ouverte, bandeau replié', (await p.evaluate(() => currentScreen())) === 'weather' && (await collapsed()));
+ok(`aujourd'hui en grand: ${await p.textContent('.wx-temp')} ${await p.textContent('.wx-desc')}`, (await p.textContent('.wx-temp')) === '12°' && (await p.textContent('.wx-desc')) === 'Couvert');
+const days = await p.$$eval('#wx-week li', (l) => l.map((x) => x.querySelector('.d').textContent));
+ok(`semaine: ${days.join(', ')}`, days.length === 6 && days[0] === 'Demain');
+await p.click('#wx-city label:nth-child(2)'); await p.waitForTimeout(400);
+ok(`deuxième ville: ${await p.textContent('.wx-temp')}`, (await p.textContent('.wx-temp')) === '16°');
 ok(`${scheme} erreurs JS: ${errs}`, errs.length === 0);
 await b.close();

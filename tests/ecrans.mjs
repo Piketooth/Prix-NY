@@ -43,7 +43,7 @@ const where = () => p.evaluate(() => currentScreen());
 // Menu de l'écran principal
 await p.click('#menu-open'); await p.waitForTimeout(150);
 const items = await p.$$eval('#main-menu .menu-row', (l) => l.map((x) => x.textContent.trim()));
-ok(`menu: ${items.join(', ')}`, items.join() === 'Accueil,Applis utiles,Calculatrice,Panier en cours,Mes paniers,Réglages');
+ok(`menu: ${items.join(', ')}`, items.join() === 'Accueil,Applis utiles,Calculatrice,Panier en cours,Mes paniers,Météo,Réglages');
 await p.mouse.click(200, 600); await p.waitForTimeout(200);
 ok('menu fermé en touchant ailleurs', await p.isHidden('#main-menu'));
 await p.click('#menu-open'); await p.click('#menu-saved'); await p.waitForTimeout(250);
@@ -51,20 +51,20 @@ ok('menu → Mes paniers', (await p.isVisible('#saved-view')) && (await p.isHidd
 await p.goBack(); await p.waitForTimeout(250);
 ok('retour à l’accueil', (await p.evaluate(() => openViews.length)) === 0);
 const seen = ['main'];
-for (let i = 0; i < 5; i++) { await swipe(320, 60); seen.push(await where()); }
-ok(`balayage vers la gauche: ${seen.join(' → ')}`, seen.join() === 'main,apps,calc,cart,saved,settings');
+for (let i = 0; i < 6; i++) { await swipe(320, 60); seen.push(await where()); }
+ok(`balayage vers la gauche: ${seen.join(' → ')}`, seen.join() === 'main,apps,calc,cart,saved,weather,settings');
 ok('points de position affichés', await p.isVisible('#screen-dots'));
 await swipe(320, 60);
 ok('fin de liste : reste sur Réglages', (await where()) === 'settings');
 const back = [];
-for (let i = 0; i < 5; i++) { await swipe(80, 340); back.push(await where()); }
-ok(`balayage vers la droite: ${back.join(' → ')}`, back.join() === 'saved,cart,calc,apps,main');
+for (let i = 0; i < 6; i++) { await swipe(80, 340); back.push(await where()); }
+ok(`balayage vers la droite: ${back.join(' → ')}`, back.join() === 'weather,saved,cart,calc,apps,main');
 ok('accueil visible', !(await p.evaluate(() => document.body.classList.contains('no-scroll'))));
 
 // Écrans empilés (Panier puis Mes paniers) : un balayage n'en garde qu'un, le retour mène à l'accueil
 await p.click('#cart-open'); await p.waitForTimeout(250); await p.click('#saved-open'); await p.waitForTimeout(250);
 await swipe(320, 60);
-ok(`depuis Mes paniers: ${await where()}`, (await where()) === 'settings' && (await p.evaluate(() => openViews.length)) === 1);
+ok(`depuis Mes paniers: ${await where()}`, (await where()) === 'weather' && (await p.evaluate(() => openViews.length)) === 1);
 await p.goBack(); await p.waitForTimeout(400);
 ok(`retour: ${await where()}`, (await where()) === 'main');
 
@@ -92,7 +92,7 @@ await p.goBack(); await p.waitForTimeout(300);
 await p.click('#menu-open'); await p.click('#menu-settings'); await p.waitForTimeout(300);
 await p.click('#screen-order li:nth-child(4) button:has-text("▲")'); await p.waitForTimeout(150);
 const order = await p.$$eval('#screen-order .name', (l) => l.map((x) => x.textContent));
-ok(`ordre: ${order.join(', ')}`, order.join() === 'Accueil,Applis utiles,Panier en cours,Calculatrice,Mes paniers,Réglages');
+ok(`ordre: ${order.join(', ')}`, order.join() === 'Accueil,Applis utiles,Panier en cours,Calculatrice,Mes paniers,Météo,Réglages');
 // (le 4e, Mes paniers, est monté d'un cran)
 await p.click('#apps-choice li:has-text("Citymapper") input'); await p.click('#apps-choice li:has-text("NYC Ferry") .name'); await p.waitForTimeout(150);
 await p.click('#apps-choice li:has-text("Uber") button:has-text("▲")'); await p.waitForTimeout(100);
@@ -118,11 +118,11 @@ await p.waitForTimeout(2300);
 const a2 = Number(await p.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--glass-a')));
 ok(`givré qui descend puis revient: ${a0.toFixed(2)} → ${a1.toFixed(2)} → ${a2.toFixed(2)}`, Math.abs(a0 - 0.21) < 0.02 && a1 < 0.03 && Math.abs(a2 - 0.21) < 0.02);
 await p.reload(); await p.waitForTimeout(800);
-ok('ordre mémorisé', (await p.evaluate(() => state.settings.screens.join())) === 'main,apps,cart,calc,saved,settings');
+ok('ordre mémorisé', (await p.evaluate(() => state.settings.screens.join())) === 'main,apps,cart,calc,saved,weather,settings');
 await swipe(320, 60);
 ok(`nouvel ordre appliqué: ${await where()}`, (await where()) === 'apps');
 const names = await p.$$eval('.app-name', (l) => l.map((x) => x.textContent));
-ok(`choix et ordre des applis: ${names.join(', ')}`, names.slice(0, 2).join() === 'Uber,Google Maps' && !names.includes('Citymapper') && names.includes('NYC Ferry') && names.at(-1) === 'WhatsApp' && (await p.$$eval('.apps-group', (l) => l.map((x) => x.textContent))).join() === 'Applis suggérées,Mes applis');
+ok(`choix et ordre des applis: ${names.join(', ')}`, names.slice(0, 2).join() === 'Uber,Google Maps' && !names.includes('Citymapper') && names.includes('NYC Ferry') && names.at(-1) === 'WhatsApp' && (await p.$$eval('#apps-grid .apps-group', (l) => l.map((x) => x.textContent))).join() === 'Applis suggérées,Mes applis');
 // Masquer les applis non installées
 await p.evaluate(() => { state.settings.hideMissing = true; renderApps(); }); await p.waitForTimeout(200);
 const visible = await p.$$eval('.app-name', (l) => l.map((x) => x.textContent));
@@ -130,7 +130,7 @@ ok(`non installées masquées: ${visible.join(', ')}`, visible.join() === 'Uber,
 await p.evaluate(() => { state.settings.hideMissing = false; renderApps(); }); await p.waitForTimeout(200);
 ok('givré animé mémorisé', await p.evaluate(() => state.settings.frostAnim.on));
 await p.screenshot({ path: `${out}/ecrans-${scheme}.png` });
-await swipe(320, 60); await swipe(320, 60); await swipe(320, 60); await swipe(320, 60);
+await swipe(320, 60); await swipe(320, 60); await swipe(320, 60); await swipe(320, 60); await swipe(320, 60);
 await p.click('#settings-info'); await p.waitForTimeout(200);
 ok(`aide Réglages: ${await p.textContent('#info-title')}`, (await p.textContent('#info-title')) === 'Réglages' && (await p.textContent('#info-body')).includes('BigDataCloud'));
 ok(`${scheme} erreurs JS: ${errs}`, errs.length === 0);

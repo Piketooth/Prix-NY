@@ -1530,6 +1530,36 @@ body { padding-top: calc(var(--mast-h, 150px) + 6px); }
   font: 700 14px "Archivo Narrow", sans-serif; letter-spacing: .04em; text-transform: uppercase; cursor: pointer;
 }
 .mast-tool svg { color: var(--total); }
+.mini-line { display: flex; align-items: center; gap: 6px; }
+.wx-link { cursor: pointer; padding: 1px 6px; margin: -1px 0; border-radius: 999px; background: var(--field); border: 1px solid var(--glass-edge); }
+.wx-link[hidden] { display: none; }
+.mast-clocks .wx-link { margin-left: 4px; }
+
+/* Météo */
+.weather-scroll { flex: 1; overflow-y: auto; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+.wx-city { display: flex; margin: 0 0 12px; }
+.wx-city label { flex: 1; text-align: center; }
+.wx-today { text-align: center; display: grid; justify-items: center; gap: 2px; padding: 20px 16px; }
+.wx-big { font-size: 84px; line-height: 1; }
+.wx-temp { font-size: 64px; font-weight: 900; line-height: 1; color: var(--total); font-variant-numeric: tabular-nums; }
+.wx-desc { font-size: 22px; font-weight: 800; }
+.wx-minmax { font-size: 18px; font-weight: 700; opacity: .85; }
+.wx-facts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; margin-top: 12px; width: 100%; font-size: 16px; font-weight: 700; text-align: left; }
+.wx-facts span { opacity: .8; }
+.wx-week { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.wx-week li {
+  display: grid; grid-template-columns: 74px 36px 1fr auto; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 16px;
+  background: var(--glass); border: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: blur(var(--blur)) saturate(1.6); backdrop-filter: blur(var(--blur)) saturate(1.6);
+  font-size: 17px; font-weight: 800;
+}
+.wx-week .d { text-transform: capitalize; }
+.wx-week .i { font-size: 24px; text-align: center; }
+.wx-week .r { font-size: 14px; font-weight: 700; opacity: .75; }
+.wx-week .t { font-variant-numeric: tabular-nums; }
+.wx-week .t small { opacity: .65; font-weight: 700; margin-left: 6px; }
+body.has-wp .wx-week li { text-shadow: 0 1px calc(var(--glow, 1) * 3px) var(--ts), 0 0 calc(var(--halo, 0) * var(--glow, 1) * 10px) var(--ts); }
 .mast-title {
   margin: 0;
   text-align: center;

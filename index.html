@@ -33,7 +33,7 @@
       <img class="brand-mark" src="icons/mark-128.png" alt="" width="44" height="44">
       <div id="mast-toggle" class="mast-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="mast-more" aria-label="Afficher ou masquer le détail du bandeau">
         <h1 class="mast-title">New York</h1>
-        <span class="mast-mini" aria-hidden="true"><span id="mini-time"></span><span id="mini-rate"></span></span>
+        <span class="mast-mini"><span class="mini-line"><span id="mini-time"></span><span id="mini-weather" class="wx-link" role="button" tabindex="0" aria-label="Météo" hidden></span></span><span id="mini-rate"></span></span>
         <span class="mast-chevron" aria-hidden="true"></span>
       </div>
       <button id="menu-open" class="round-btn small" type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -224,6 +224,20 @@
     <div class="apps-scroll">
       <div id="apps-grid" class="apps-grid"></div>
       <p id="apps-note" class="note apps-note"></p>
+    </div>
+  </section>
+
+  <section id="weather-view" class="sheet" hidden aria-labelledby="weather-title">
+    <div class="sheet-head">
+      <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 id="weather-title">Météo</h2>
+    </div>
+    <div class="weather-scroll">
+      <div id="wx-city" class="segmented wx-city" role="radiogroup" aria-label="Ville"></div>
+      <section id="wx-today" class="card glass wx-today" aria-live="polite"></section>
+      <h3 class="apps-group">Cette semaine</h3>
+      <ol id="wx-week" class="wx-week"></ol>
+      <p id="wx-note" class="note">Prévisions Open-Meteo, mises à jour toutes les 30 minutes.</p>
     </div>
   </section>
 
