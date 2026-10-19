@@ -31,16 +31,19 @@ const DEFAULT_TAXES = {
   updated: null,
   salesTax: { rate: 0.08875 },
   clothing: { threshold: 110, rate: 0 },
+  hotel: { rate: 0.1475, perNight: 3.5 },
   tip: { choices: [0.15, 0.18, 0.20, 0.22, 0.25], default: 0.20 },
 };
 
+// Couleurs : nuances de la charte PN8 (ambres et gris-bleus), texte anthracite.
 const CATEGORIES = [
-  { id: 'shop', label: 'Shopping', emoji: '🛍️', color: '#ffb734' },
-  { id: 'clothes', label: 'Vêtements et chaussures', emoji: '👕', color: '#9d8cf0' },
-  { id: 'food', label: 'Resto', emoji: '🍔', color: '#ff7a59' },
-  { id: 'grocery', label: 'Épicerie / Pharmacie', emoji: '🛒', color: '#3fb8a9' },
-  { id: 'transport', label: 'Transport', emoji: '🚕', color: '#5b9cf0' },
-  { id: 'other', label: 'Autre', emoji: '✨', color: '#7a8499' },
+  { id: 'shop', label: 'Shopping', emoji: '🛍️', color: '#FFB734' },
+  { id: 'clothes', label: 'Vêtements et chaussures', emoji: '👕', color: '#E39B2D' },
+  { id: 'food', label: 'Resto', emoji: '🍔', color: '#F6CF7E' },
+  { id: 'grocery', label: 'Épicerie / Pharmacie', emoji: '🛒', color: '#A9B1C2' },
+  { id: 'transport', label: 'Transport', emoji: '🚕', color: '#8F98AB' },
+  { id: 'hotel', label: 'Hôtel', emoji: '🏨', color: '#CDB48A' },
+  { id: 'other', label: 'Autre', emoji: '✨', color: '#D4D8E0' },
 ];
 // Resto et Transport : pourboire possible et partage entre plusieurs personnes (une seule addition).
 const isShared = (id) => id === 'food' || id === 'transport';
@@ -61,12 +64,13 @@ const state = {
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
   settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 2,
     // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
-    screens: ['main', 'apps', 'cart', 'saved', 'settings'],
+    screens: ['main', 'apps', 'calc', 'cart', 'saved', 'settings'],
     // apps : applis affichées, dans l'ordre choisi ; « c:paquet » pour celles ajoutées depuis le téléphone
     apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
     customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
+    hideMissing: false, // masquer les applis non installées (APK)
     // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour
-    frostAnim: { on: false, every: 20, from: 30, to: 90, dur: 4 } },
+    frostAnim: { on: false, every: 20, from: 25, to: 0, dur: 2 } },
 };
 
 const store = {
@@ -107,9 +111,12 @@ function compute({ unit, qty, split, category, opts }, taxes) {
   const exempt = exemptClothes || category === 'grocery';
   const exemptRate = exemptClothes ? taxes.clothing.rate : (taxes.grocery?.rate ?? 0);
   // Transport : le prix affiché (compteur du taxi, appli VTC, ticket) inclut déjà taxes et suppléments.
-  const taxRate = !opts.tax || category === 'transport' ? 0 : (exempt ? exemptRate : taxes.salesTax.rate);
+  const hotel = category === 'hotel' && opts.tax;
+  const hotelTax = taxes.hotel || DEFAULT_TAXES.hotel;
+  const taxRate = !opts.tax || category === 'transport' ? 0 : hotel ? hotelTax.rate : (exempt ? exemptRate : taxes.salesTax.rate);
   const price = unit * qty;
-  const tax = price * taxRate;
+  // Hôtel : qty = nombre de nuits ; taxes en % plus frais fixes par nuit
+  const tax = price * taxRate + (hotel ? hotelTax.perNight * qty : 0);
   const tip = opts.tip ? (opts.tipBasis === 'post' ? price + tax : price) * opts.tipPct : 0;
   const bill = price + tax + tip;
   return { unit, qty, split, category, opts, taxRate, exempt, price, tax, tip, bill, share: bill / split };
@@ -182,21 +189,32 @@ function render() {
     const c = Number(b.dataset.pct);
     b.setAttribute('aria-checked', String(it.opts.tip ? c === it.opts.tipPct : c === 0));
   });
-  $('stepper-label').textContent = food ? 'Personnes' : 'Quantité';
+  $('stepper-label').textContent = food ? 'Personnes' : state.category === 'hotel' ? 'Nuits' : 'Quantité';
   $('step-value').textContent = food ? state.split : state.qty;
   $('step-minus').disabled = (food ? state.split : state.qty) <= 1;
 
   $('hero-label').textContent = it.split > 1 ? 'Votre part' : 'Vous payez';
   showEur($('total-main'), it.share);
+  // Affichage de la saisie (pavé ouvert) : prix tapé en $, montant final en €
+  const c = catOf(state.category);
+  const typed = $('price').value;
+  $('pf-cat').textContent = `${c.emoji} ${c.label}`;
+  $('pf-usd').textContent = `$${typed || '0'}`;
+  const rate = effRate();
+  $('pf-eur').textContent = rate == null ? '— €' : eur.format(it.share * rate);
+  $('pf-sub').textContent = it.split > 1 ? `Votre part : ${usd.format(it.share)}` : `Total : ${usd.format(it.bill)}`;
   $('total-sub').textContent = it.split > 1
     ? `Votre part : ${usd.format(it.share)} · addition ${usd.format(it.bill)}`
     : `Total : ${usd.format(it.bill)}`;
 
-  $('b-price-label').textContent = it.qty > 1 ? `Prix (${it.qty} × ${usd.format(it.unit)})` : 'Prix';
+  $('b-price-label').textContent = it.category === 'hotel' ? `Prix (${plural(it.qty, 'nuit')} × ${usd.format(it.unit)})`
+    : it.qty > 1 ? `Prix (${it.qty} × ${usd.format(it.unit)})` : 'Prix';
   $('b-price').textContent = usd.format(it.price);
   $('b-tax-row').hidden = !it.opts.tax;
   $('b-tax').textContent = it.category === 'transport' ? 'incluse dans le prix'
-    : it.exempt && it.price > 0 ? 'exonéré' : `${usd.format(it.tax)} (${pct(it.taxRate)})`;
+    : it.exempt && it.price > 0 ? 'exonéré'
+    : it.category === 'hotel' && it.opts.tax ? `${usd.format(it.tax)} (${pct(it.taxRate)} + ${usd.format((state.taxes.hotel || DEFAULT_TAXES.hotel).perNight)}/nuit)`
+    : `${usd.format(it.tax)} (${pct(it.taxRate)})`;
   $('b-tip-row').hidden = !it.opts.tip;
   $('b-tip').textContent = `${usd.format(it.tip)} (${pct(it.opts.tipPct)})`;
   $('b-split-row').hidden = it.split <= 1;
@@ -249,11 +267,23 @@ const CAT_INFO = {
     title: 'Transport',
     body: () => [
       'Aucune taxe n’est ajoutée : le prix affiché est le prix final.',
-      'Métro et bus : 3 $ le trajet en payant sans contact (OMNY), sans pourboire. Au-delà d’environ 35 $ dans la semaine, les trajets sont gratuits.',
-      'Taxi jaune : le compteur inclut déjà les suppléments (MTA, embouteillage au sud de la 60ᵉ rue…). Pourboire d’usage : 15 à 20 %, proposé sur l’écran de paiement.',
-      'Uber, Lyft : le prix de l’appli comprend la sales tax, le Black Car Fund et les suppléments. Pourboire facultatif de 15 à 20 %, donné dans l’appli.',
-      'Ferry, Citi Bike : prix fixe, sans pourboire.',
+      ['Métro et bus', '3 $ le trajet en payant sans contact (OMNY), sans pourboire. Au-delà d’environ 35 $ dans la semaine, les trajets sont gratuits.'],
+      ['Taxi jaune', 'le compteur inclut déjà les suppléments (MTA, embouteillage au sud de la 60ᵉ rue…). Pourboire d’usage : 15 à 20 %, proposé sur l’écran de paiement.'],
+      ['Uber, Lyft', 'le prix de l’appli comprend la sales tax, le Black Car Fund et les suppléments. Pourboire facultatif de 15 à 20 %, donné dans l’appli.'],
+      ['Ferry, Citi Bike', 'prix fixe, sans pourboire.'],
       'Le pourboire de 20 % est proposé par défaut, comme pour un taxi : choisissez « Aucun » pour le métro, le bus ou le ferry. Réglez « Personnes » pour partager la course.',
+    ],
+  },
+  hotel: {
+    short: (it, t) => `+ ${pct((t.hotel || DEFAULT_TAXES.hotel).rate)} et ${(t.hotel || DEFAULT_TAXES.hotel).perNight.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} $ par nuit`,
+    title: 'Hôtel',
+    body: (t) => [
+      'Les prix affichés par les hôtels et les sites de réservation sont souvent hors taxes. À New York, on ajoute à chaque nuit :',
+      ['Taxes', `${pct((t.hotel || DEFAULT_TAXES.hotel).rate)} (sales tax ${pct(t.salesTax.rate)} et taxe hôtelière de la ville ${pct((t.hotel || DEFAULT_TAXES.hotel).rate - t.salesTax.rate)}).`],
+      ['Frais fixes', `${(t.hotel || DEFAULT_TAXES.hotel).perNight.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} $ par chambre et par nuit (2 $ de l’État et 1,50 $ pour le Javits Center).`],
+      ['« Resort fee » ou « destination fee »', 'beaucoup d’hôtels ajoutent 20 à 45 $ par nuit, eux aussi taxés. Ajoutez-le au prix de la nuit s’il est annoncé.'],
+      ['Pourboires d’usage (non ajoutés par l’appli)', '2 à 5 $ par nuit pour le ménage, 1 à 2 $ par bagage pour le bagagiste.'],
+      'Indiquez le prix d’une nuit et le nombre de nuits.',
     ],
   },
   grocery: {
@@ -296,14 +326,12 @@ function showCatInfo() {
 
 const PAGE_INFO = {
   settings: ['Réglages', [
-    'Tout ce qui personnalise l’appli. Les réglages sont gardés sur le téléphone.',
-    ['Écrans', 'ordre dans lequel on passe d’un écran à l’autre en faisant glisser le doigt'],
-    ['Applis utiles', 'applis affichées dans la page de raccourcis, leur ordre, et vos propres applis'],
-    ['Taux de change', 'cours officiel de la BCE mis à jour, ou votre propre taux ; frais bancaires de votre carte'],
-    ['Taxe de vente', 'sales tax de New York ajoutée aux prix affichés, avec les exonérations'],
-    ['Saisie vocale', 'langue utilisée pour dicter les prix'],
-    ['Deuxième horloge', 'ville dont l’heure s’affiche sous le titre'],
-    ['Fond d’écran', 'photos de New York ou les vôtres, couleurs, givré fixe ou animé'],
+    'Tout ce qui personnalise l’appli. Les réglages restent sur le téléphone.',
+    ['Argent', 'cours officiel de la BCE mis à jour automatiquement, ou votre propre taux ; frais bancaires de votre carte ; sales tax de New York et ses exonérations.'],
+    ['Heure', 'ville dont l’heure s’affiche sous le titre, à côté de celle de New York. Le bouton position envoie votre position approximative au service BigDataCloud pour trouver le nom de la ville, et seulement à ce moment-là.'],
+    ['Saisie', 'langue de la dictée des prix et des villes, son au démarrage.'],
+    ['Navigation', 'ordre des écrans quand on fait glisser le doigt ; applis affichées dans la page Applis utiles, leur ordre, vos propres applis, et masquer celles qui ne sont pas installées.'],
+    ['Apparence', 'fond d’écran (photos de New York ou les vôtres), couleurs adaptées à la photo, givré fixe ou animé.'],
   ]],
 };
 
@@ -671,7 +699,7 @@ function haptic(kind = 'light') {
 function cartText(c = cart) {
   const rate = effRate();
   const toE = (v) => (rate ? ` → ${eur.format(v * rate)}` : '');
-  const lines = [`🗽 ${c.name ? `Panier « ${c.name} »` : 'Mon panier'} — Vrai Prix New York`, ''];
+  const lines = [`🗽 ${c.name ? `Panier « ${c.name} »` : 'Mon panier'} — New York`, ''];
   c.items.forEach((it, i) => {
     const c = catOf(it.category);
     const qty = it.qty > 1 ? ` ×${it.qty}` : '';
@@ -692,7 +720,7 @@ function cartText(c = cart) {
 async function shareCart(c = cart) {
   if (!c.items.length) return;
   const text = cartText(c);
-  const title = c.name || 'Mon panier Vrai Prix New York';
+  const title = c.name || 'Mon panier New York';
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
@@ -817,7 +845,7 @@ function renderCartView(kind) {
   const t = cartTotals(c.items);
   const rate = effRate();
 
-  $(ids.title).textContent = c.name || 'Panier';
+  $(ids.title).textContent = c.name || (kind === 'cart' ? 'Sans nom' : 'Panier');
   showEur($(ids.eur), t.share);
   $(ids.usd).textContent = usd.format(t.share);
   const detail = [`Prix ${usd.format(t.price)}`];
@@ -974,7 +1002,7 @@ function askValue({ title, label, value = '', ok = 'Valider', numeric = false })
 async function editPrice(it, kind) {
   const v = await askValue({
     title: 'Modifier le prix',
-    label: it.qty > 1 ? 'Prix affiché en $, par article' : (it.category === 'food' ? 'Montant de l’addition en $ (hors taxe)' : 'Prix affiché en $'),
+    label: it.category === 'hotel' ? 'Prix d’une nuit en $ (hors taxes)' : it.qty > 1 ? 'Prix affiché en $, par article' : (it.category === 'food' ? 'Montant de l’addition en $ (hors taxe)' : 'Prix affiché en $'),
     value: it.unit.toFixed(2).replace('.', ','),
     numeric: true,
   });
@@ -1252,7 +1280,7 @@ function clearCart() {
   cart = { id: null, name: null, items: [] };
   saveCart();
   haptic('medium');
-  toast('Panier vidé', 'Annuler', () => { cart = before; saveCart(); });
+  toast('Panier réinitialisé', 'Annuler', () => { cart = before; saveCart(); });
 }
 
 function askCartName() {
@@ -1361,7 +1389,7 @@ async function exportCarts() {
 function importBackup(text) {
   let data;
   try { data = JSON.parse(text); } catch { throw new Error('Ce texte n’est pas une sauvegarde valide'); }
-  if (data?.app !== BACKUP_APP || !Array.isArray(data.saved)) throw new Error('Ce fichier n’est pas une sauvegarde Vrai Prix New York');
+  if (data?.app !== BACKUP_APP || !Array.isArray(data.saved)) throw new Error('Ce fichier n’est pas une sauvegarde New York');
   const incoming = data.saved.map((s) => ({ ...s, items: (s.items || []).map(migrateItem) }));
   if (data.current?.items?.length && !data.current.id) {
     incoming.push({ id: uid(), name: data.current.name || `Panier importé du ${new Date(data.exportedAt).toLocaleDateString('fr-FR')}`, savedAt: data.exportedAt, items: data.current.items.map(migrateItem) });
@@ -1460,9 +1488,14 @@ function initSettings() {
       state.settings.frost = Math.min(100, Math.max(0, f));
     }
     // Ancien ordre par défaut (Applis après Mes paniers) : nouvel ordre par défaut, Applis juste après l'accueil.
-    if (Array.isArray(s.screens) && s.screens.length === SCREEN_IDS.length && SCREEN_IDS.every((id) => s.screens.includes(id))
-      && s.screens.join() !== 'main,cart,saved,apps,settings') state.settings.screens = s.screens;
+    if (Array.isArray(s.screens) && s.screens.join() !== 'main,cart,saved,apps,settings') {
+      // Écrans ajoutés depuis (Calculatrice) : insérés avant les Réglages.
+      const known = s.screens.filter((id) => SCREEN_IDS.includes(id));
+      for (const id of SCREEN_IDS) if (!known.includes(id)) known.splice(Math.max(0, known.indexOf('settings')), 0, id);
+      if (known.length === SCREEN_IDS.length) state.settings.screens = known;
+    }
     if (Array.isArray(s.customApps)) state.settings.customApps = s.customApps.filter((a) => a?.pkg && a?.name);
+    if (s.hideMissing) state.settings.hideMissing = true;
     const custom = state.settings.customApps.map((c) => `c:${c.pkg}`);
     const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
     state.settings.apps = [...apps, ...custom.filter((id) => !apps.includes(id))];
@@ -1495,8 +1528,10 @@ function initSettings() {
     haptic();
   });
   $('set-frost').value = state.settings.frost;
+  $('set-frost-v').textContent = `${state.settings.frost} %`;
   $('set-frost').addEventListener('input', () => {
     state.settings.frost = Number($('set-frost').value);
+    $('set-frost-v').textContent = `${state.settings.frost} %`;
     applyFrost();
   });
   $('set-frost').addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
@@ -1527,12 +1562,8 @@ function openKeypad() {
   openView('keypad', false);
   const h = $('keypad').offsetHeight;
   document.body.style.setProperty('--kp-h', `${h}px`);
-  document.body.classList.add('kp-open');
-  // Fait remonter la page pour garder le total visible au-dessus du pavé.
-  setTimeout(() => {
-    const overlap = $('total-sub').getBoundingClientRect().bottom - (innerHeight - h - 16);
-    if (overlap > 0) window.scrollBy({ top: overlap, behavior: REDUCED_MOTION ? 'auto' : 'smooth' });
-  }, 30);
+  document.body.classList.add('kp-open', 'price-mode');
+  render();
 }
 
 function pressKey(key) {
@@ -1599,7 +1630,7 @@ const openViews = [];
 const OVERLAYS = {
   keypad: () => {
     $('keypad').hidden = true;
-    document.body.classList.remove('kp-open');
+    document.body.classList.remove('kp-open', 'price-mode');
     $('price').blur();
   },
   kbd: () => { if (typeof Kbd !== 'undefined') Kbd.hide(); },
@@ -1623,6 +1654,14 @@ function openView(id, lockScroll = true) {
   else history.pushState({ view: id }, '');
   if (lockScroll) document.body.classList.add('no-scroll');
   document.body.dataset.view = id;
+  syncCovered();
+}
+
+// Pages transparentes : seule la page du dessus est visible.
+function syncCovered() {
+  const sheets = openViews.filter((v) => $(v.id)?.classList.contains('sheet'));
+  document.querySelectorAll('.sheet.covered').forEach((el) => el.classList.remove('covered'));
+  sheets.slice(0, -1).forEach((v) => $(v.id).classList.add('covered'));
 }
 
 window.addEventListener('popstate', () => {
@@ -1636,6 +1675,7 @@ window.addEventListener('popstate', () => {
   }
   if (!openViews.some((x) => x.lockScroll)) document.body.classList.remove('no-scroll');
   document.body.dataset.view = openViews.at(-1)?.id || '';
+  syncCovered();
   // Retour à l'accueil après un balayage : on saute les entrées d'historique devenues inutiles.
   if (!openViews.length && ghostEntries) {
     skipPop = 1;
@@ -1645,15 +1685,101 @@ window.addEventListener('popstate', () => {
   }
 });
 
+// --- Touche retour du téléphone ----------------------------------------------
+// Ordre : clavier ou pavé ouvert (seul fermé) → fenêtre → écran → sortie de l'appli.
+function onBackButton() {
+  const top = openViews.at(-1)?.id;
+  if (top === 'kbd' || top === 'keypad') { history.back(); return; }
+  const dlg = [...document.querySelectorAll('dialog[open]')].at(-1);
+  if (dlg) { dlg.close('cancel'); return; }
+  if (!$('scanner').hidden) { $('scan-close').click(); return; }
+  if (openViews.length) { history.back(); return; }
+  window.Capacitor?.nativePromise('App', 'minimizeApp', {}).catch(() => {});
+}
+
+// Bulles ⓘ : un toucher en dehors de la bulle la ferme.
+function initInfoDialog() {
+  const dlg = $('info-dialog');
+  dlg.addEventListener('click', (e) => {
+    if (e.target !== dlg) return; // clic sur le contenu
+    const r = dlg.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close('ok');
+  });
+}
+
+function initBackButton() {
+  // APK : l'appli décide (sinon Android quitterait l'appli au lieu de fermer le clavier)
+  if (IS_NATIVE && window.Capacitor?.addListener) {
+    try { window.Capacitor.addListener('App', 'backButton', onBackButton); } catch { /* module absent */ }
+  }
+  // Navigateur : la touche retour ferme une fenêtre ouverte ; avec le clavier, seul le clavier se ferme.
+  document.addEventListener('cancel', (e) => {
+    const dlg = e.target;
+    if (dlg.tagName === 'DIALOG' && typeof Kbd !== 'undefined' && Kbd.isOpen() && dlg.contains(Kbd.element())) {
+      e.preventDefault();
+      Kbd.close();
+    }
+  }, true);
+  // Fenêtre fermée par un bouton : son clavier se ferme aussi.
+  document.addEventListener('close', (e) => {
+    if (e.target.tagName === 'DIALOG' && typeof Kbd !== 'undefined' && Kbd.isOpen() && e.target.contains(Kbd.element())) Kbd.close();
+  }, true);
+}
+
 // --- Écrans : balayage gauche / droite, dans l'ordre choisi dans les Réglages -------
 
+const ICON = (d) => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const SCREENS = {
-  main: { label: 'Accueil', view: null },
-  cart: { label: 'Panier', view: 'cart-view' },
-  saved: { label: 'Mes paniers', view: 'saved-view' },
-  apps: { label: 'Applis utiles', view: 'apps-view' },
-  settings: { label: 'Réglages', view: 'settings-view' },
+  main: { label: 'Accueil', view: null, icon: ICON('<path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/>') },
+  apps: { label: 'Applis utiles', view: 'apps-view', icon: ICON('<rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/>') },
+  calc: { label: 'Calculatrice', view: 'calc-view', icon: ICON('<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>') },
+  cart: { label: 'Panier en cours', view: 'cart-view', icon: ICON('<path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/>') },
+  saved: { label: 'Mes paniers', view: 'saved-view', icon: ICON('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>') },
+  settings: { label: 'Réglages', view: 'settings-view', icon: ICON('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>') },
 };
+
+// Menu du bandeau : les écrans dans l'ordre du balayage, l'écran affiché en surbrillance.
+function renderMenu() {
+  const cur = openViews.filter((v) => v.id !== 'main-menu').map((v) => screenOfView(v.id)).filter(Boolean).at(-1) || 'main';
+  $('main-menu').replaceChildren(...state.settings.screens.map((id) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'menu-row';
+    b.id = `menu-${id}`;
+    b.setAttribute('role', 'menuitem');
+    if (id === cur) b.setAttribute('aria-current', 'page');
+    b.innerHTML = `${SCREENS[id].icon}<span></span>`;
+    b.querySelector('span').textContent = SCREENS[id].label;
+    b.addEventListener('click', () => menuGo(id));
+    return b;
+  }));
+}
+
+// Choix dans le menu : l'entrée d'historique du menu est réutilisée (un retour = écran précédent).
+function menuGo(screen) {
+  const fromMenu = openViews.at(-1)?.id === 'main-menu';
+  const below = openViews.filter((v) => v.id !== 'main-menu');
+  const cur = document.querySelector('dialog[open]') || below.some((v) => !screenOfView(v.id)) ? null
+    : below.length ? screenOfView(below.at(-1).id) : 'main';
+  if (screen === cur) { if (fromMenu) history.back(); return; }
+  if (fromMenu) {
+    openViews.pop();
+    OVERLAYS['main-menu']();
+    ghostEntries++; // l'entrée du menu devient inutile : sautée au retour à l'accueil
+  }
+  const order = state.settings.screens;
+  const dir = order.indexOf(screen) > order.indexOf(cur) ? 'next' : 'prev';
+  if (cur) goScreen(screen, dir);
+  else if (SCREENS[screen].view) { openView(SCREENS[screen].view); if (screen === 'apps') renderApps(); }
+}
+
+// Hauteur du bandeau fixe : les écrans commencent juste en dessous.
+function trackMastHeight() {
+  const head = document.querySelector('header.masthead');
+  const set = () => document.documentElement.style.setProperty('--mast-h', `${Math.ceil(head.getBoundingClientRect().height)}px`);
+  set();
+  new ResizeObserver(set).observe(head);
+}
 const SCREEN_IDS = Object.keys(SCREENS);
 let ghostEntries = 0; // entrées d'historique laissées par des écrans fermés en balayant
 let skipPop = 0;
@@ -1700,7 +1826,7 @@ function goScreen(screen, dir) {
   const view = SCREENS[screen].view;
   if (!view) {
     history.back();
-    animateIn([document.querySelector('main'), document.querySelector('header')], dir);
+    animateIn([document.querySelector('main'), document.querySelector('.cart-bar-wrap')], dir);
   } else if (!top) {
     openView(view);
   } else {
@@ -1714,7 +1840,9 @@ function goScreen(screen, dir) {
     $(view).scrollTop = 0;
     animateIn([$(view)], dir);
     if (screen === 'apps') renderApps();
+    if (screen === 'settings') checkApps([...APPS, ...state.settings.customApps.map(customApp)]).then(renderAppsChoice); // icônes du téléphone
   }
+  syncCovered();
   showDots(screen);
   haptic();
   return true;
@@ -1777,35 +1905,133 @@ function renderScreenOrder() {
   }));
 }
 
+// --- Calculatrice -----------------------------------------------------------
+
+const calc = { expr: '' }; // ex. « 12,5×3+10% » (virgule décimale)
+const CALC_KEYS = [
+  ['C', 'fn'], ['⌫', 'fn'], ['%', 'op'], ['÷', 'op'],
+  ['7'], ['8'], ['9'], ['×', 'op'],
+  ['4'], ['5'], ['6'], ['−', 'op'],
+  ['1'], ['2'], ['3'], ['+', 'op'],
+  ['±', 'fn'], ['0'], [','], ['=', 'eq'],
+];
+const fmtNum = (n) => (Number.isFinite(n) ? n.toLocaleString('fr-FR', { maximumFractionDigits: 10 }) : 'Erreur');
+
+// Calcule « 12,5×3+10% » : × et ÷ avant + et − ; « a + b % » ajoute b % de a (tout ce qui précède), sinon b % = b ÷ 100.
+function calcEval(expr) {
+  const toExpr = (n) => String(n).replace('.', ',');
+  // Pourcentages d'abord, de gauche à droite
+  let i;
+  while ((i = expr.indexOf('%')) !== -1) {
+    const before = expr.slice(0, i);
+    const m = before.match(/^(.*?)([+−×÷]?)(\d+(?:,\d*)?|,\d+)$/);
+    if (!m) { expr = before + expr.slice(i + 1); continue; }
+    const [, left, op, num] = m;
+    const b = parseFloat(num.replace(',', '.')) / 100;
+    const v = (op === '+' || op === '−') && left ? calcEval(left) * b : b;
+    expr = left + op + toExpr(v) + expr.slice(i + 1);
+  }
+  const tokens = expr.match(/\d+(?:[.,]\d*)?(?:e[+-]?\d+)?|[.,]\d+|[+−×÷]/g) || [];
+  const vals = [];
+  const ops = [];
+  let neg = false;
+  for (const t of tokens) {
+    if ('+−×÷'.includes(t)) {
+      if (vals.length === ops.length) { if (t === '−') neg = !neg; continue; } // signe d'un nombre
+      ops.push(t);
+    } else {
+      const n = parseFloat(t.replace(',', '.')) || 0;
+      vals.push(neg ? -n : n);
+      neg = false;
+    }
+  }
+  ops.length = Math.max(0, vals.length - 1); // opérateur en fin de saisie
+  const v2 = [vals[0] ?? 0];
+  const o2 = [];
+  ops.forEach((op, k) => {
+    const b = vals[k + 1];
+    if (op === '×') v2.push(v2.pop() * b);
+    else if (op === '÷') v2.push(v2.pop() / b);
+    else { o2.push(op); v2.push(b); }
+  });
+  return o2.reduce((acc, op, k) => (op === '+' ? acc + v2[k + 1] : acc - v2[k + 1]), v2[0]);
+}
+
+function calcPress(k) {
+  const e = calc.expr;
+  const last = e.slice(-1);
+  if (k === 'C') calc.expr = '';
+  else if (k === '⌫') calc.expr = e.slice(0, -1);
+  else if (k === '=') { if (e) calc.expr = fmtNum(calcEval(e)).replace(/\s/g, ''); }
+  else if (k === '±') {
+    const m = e.match(/(^|[+−×÷])(−?)(\d[\d,]*%?)$/);
+    if (m) calc.expr = e.slice(0, e.length - m[2].length - m[3].length) + (m[2] ? '' : '−') + m[3];
+  } else if ('+−×÷'.includes(k)) {
+    if (!e && k !== '−') return;
+    calc.expr = '+−×÷'.includes(last) ? e.slice(0, -1) + k : e + k;
+  } else if (k === '%') { if (/\d$/.test(e)) calc.expr = e + '%'; }
+  else if (k === ',') { if (!e.split(/[+−×÷]/).pop().includes(',')) calc.expr = e + (/\d$/.test(e) ? ',' : '0,'); }
+  else calc.expr = (last === '%' ? e + '×' : e) + k;
+  renderCalc(k === '=');
+  haptic();
+}
+
+function renderCalc(done = false) {
+  const e = calc.expr;
+  $('calc-expr').textContent = done ? '' : e.replace(/([+−×÷])/g, ' $1 ');
+  $('calc-result').textContent = e ? fmtNum(calcEval(e)) : '0';
+}
+
+function initCalc() {
+  $('calc-keys').replaceChildren(...CALC_KEYS.map(([k, kind]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = k;
+    if (kind) b.className = kind;
+    b.setAttribute('aria-label', { C: 'Effacer tout', '⌫': 'Effacer', '±': 'Changer le signe' }[k] || k);
+    b.addEventListener('click', () => calcPress(k));
+    return b;
+  }));
+  // Clavier physique
+  document.addEventListener('keydown', (ev) => {
+    if ($('calc-view').hidden || ev.ctrlKey || ev.metaKey) return;
+    const map = { '*': '×', x: '×', '/': '÷', '-': '−', '.': ',', Enter: '=', Backspace: '⌫', Escape: 'C', Delete: 'C' };
+    const k = map[ev.key] || ev.key;
+    if (/^[0-9]$/.test(k) || '+−×÷%,=⌫C'.includes(k)) { ev.preventDefault(); calcPress(k); }
+  });
+  renderCalc();
+}
+
 // --- Applis utiles : ouvrir l'appli si elle est installée, sinon sa page du Play Store -------
 
 const APPS = [
-  { id: 'maps', pkg: 'com.google.android.apps.maps', name: 'Google Maps', desc: 'Plans, itinéraires', emoji: '🗺️', color: '#7fc8a9', use: 'plans, itinéraires à pied, en métro ou en voiture, horaires des magasins et des musées' },
-  { id: 'citymapper', pkg: 'com.citymapper.app.release', name: 'Citymapper', desc: 'Métro, bus, à pied', emoji: '🧭', color: '#9be15d', use: 'le meilleur trajet en transports en commun, avec la bonne sortie de métro et les perturbations' },
-  { id: 'mta', pkg: 'info.mta.mymta', name: 'MTA', desc: 'Métro et bus en direct', emoji: '🚇', color: '#5b9cf0', use: 'l’appli officielle du métro et des bus : passages en temps réel, travaux, plans' },
-  { id: 'uber', pkg: 'com.ubercab', name: 'Uber', desc: 'VTC', emoji: '🚗', color: '#c9ced6', use: 'VTC : prix annoncé avant de commander, paiement dans l’appli' },
-  { id: 'lyft', pkg: 'me.lyft.android', name: 'Lyft', desc: 'VTC', emoji: '🚙', color: '#ff8fc8', use: 'VTC concurrent d’Uber : comparez les prix selon l’heure' },
-  { id: 'curb', pkg: 'com.ridecharge.android.taximagic', name: 'Curb', desc: 'Taxis jaunes', emoji: '🚕', color: '#ffd23f', use: 'commander et payer un taxi jaune depuis le téléphone' },
-  { id: 'citibike', pkg: 'com.citibikenyc.citibike', name: 'Citi Bike', desc: 'Vélos en libre-service', emoji: '🚲', color: '#6ec6ff', use: 'vélos en libre-service : stations, vélos et places libres, location à la course ou à la journée' },
-  { id: 'ferry', pkg: 'co.bytemark.nycf', name: 'NYC Ferry', desc: 'Navettes fluviales', emoji: '⛴️', color: '#7fb3ff', use: 'navettes fluviales vers Brooklyn, Queens et Rockaway : horaires et billets' },
-  { id: 'translate', pkg: 'com.google.android.apps.translate', name: 'Traduction', desc: 'Google Traduction', emoji: '🌐', color: '#8ab4f8', use: 'traduire un menu, une étiquette ou une conversation, aussi avec l’appareil photo' },
-  { id: 'wallet', pkg: 'com.google.android.apps.walletnfcrel', name: 'Google Wallet', desc: 'Payer, OMNY', emoji: '💳', color: '#ffb734', use: 'payer sans contact avec le téléphone, y compris le métro et le bus (OMNY)' },
-  { id: 'wise', pkg: 'com.transferwise.android', name: 'Wise', desc: 'Carte sans frais', emoji: '💸', color: '#b5e48c', use: 'carte et compte multidevises, sans frais de change cachés' },
-  { id: 'yelp', pkg: 'com.yelp.android', name: 'Yelp', desc: 'Restos, avis', emoji: '⭐', color: '#ff7a59', use: 'trouver restaurants, bars et magasins avec les avis et les photos' },
-  { id: 'opentable', pkg: 'com.opentable', name: 'OpenTable', desc: 'Réserver un resto', emoji: '🍽️', color: '#ff9e9e', use: 'réserver une table au restaurant' },
-  { id: 'todaytix', pkg: 'com.todaytix.TodayTix', name: 'TodayTix', desc: 'Billets de spectacles', emoji: '🎭', color: '#f6a6ff', use: 'billets de Broadway et de spectacles, loteries et places à prix réduit du jour' },
+  { id: 'maps', pkg: 'com.google.android.apps.maps', name: 'Google Maps', desc: 'Plans, itinéraires', emoji: '🗺️', color: '#7fc8a9', use: 'Plans, itinéraires à pied, en métro ou en voiture, horaires des magasins et des musées. Fonctionne aussi hors connexion si vous téléchargez la carte de New York avant de partir.' },
+  { id: 'citymapper', pkg: 'com.citymapper.app.release', name: 'Citymapper', desc: 'Métro, bus, à pied', emoji: '🧭', color: '#9be15d', use: 'Le meilleur trajet en transports en commun : métro, bus, ferry, à pied ou à vélo. Indique quelle voiture prendre et quelle sortie de métro emprunter, et signale les perturbations en temps réel.' },
+  { id: 'mta', pkg: 'info.mta.mymta', name: 'MTA', desc: 'Métro et bus en direct', emoji: '🚇', color: '#5b9cf0', use: 'L’appli officielle du métro et des bus de New York : passages en temps réel, travaux et fermetures de stations, plans des lignes.' },
+  { id: 'uber', pkg: 'com.ubercab', name: 'Uber', desc: 'VTC', emoji: '🚗', color: '#c9ced6', use: 'VTC (voiture avec chauffeur) : le prix est annoncé avant de commander, taxes et suppléments compris, et le paiement se fait dans l’appli. Pourboire facultatif, donné dans l’appli après la course.' },
+  { id: 'lyft', pkg: 'me.lyft.android', name: 'Lyft', desc: 'VTC', emoji: '🚙', color: '#ff8fc8', use: 'VTC concurrent d’Uber, qui fonctionne de la même façon : prix annoncé avant de commander, paiement dans l’appli. Comparez les deux, les prix varient selon l’heure et la demande.' },
+  { id: 'curb', pkg: 'com.ridecharge.android.taximagic', name: 'Curb', desc: 'Taxis jaunes', emoji: '🚕', color: '#ffd23f', use: 'Commander un taxi jaune depuis le téléphone, ou payer avec l’appli un taxi hélé dans la rue, en scannant le code affiché sur l’écran du taxi.' },
+  { id: 'citibike', pkg: 'com.citibikenyc.citibike', name: 'Citi Bike', desc: 'Vélos en libre-service', emoji: '🚲', color: '#6ec6ff', use: 'Vélos en libre-service : carte des stations avec les vélos et les places libres, location à la course ou à la journée, déverrouillage du vélo avec le téléphone.' },
+  { id: 'ferry', pkg: 'co.bytemark.nycf', name: 'NYC Ferry', desc: 'Navettes fluviales', emoji: '⛴️', color: '#7fb3ff', use: 'Navettes fluviales sur l’East River et vers Brooklyn, Queens, le Bronx et Rockaway : horaires, achat et validation des billets dans l’appli. Belle vue sur Manhattan pour le prix d’un trajet.' },
+  { id: 'translate', pkg: 'com.google.android.apps.translate', name: 'Traduction', desc: 'Google Traduction', emoji: '🌐', color: '#8ab4f8', use: 'Google Traduction : traduire un menu, une étiquette ou un panneau en le visant avec l’appareil photo, ou une conversation à voix haute. Téléchargez l’anglais avant de partir pour l’utiliser hors connexion.' },
+  { id: 'wallet', pkg: 'com.google.android.apps.walletnfcrel', name: 'Google Wallet', desc: 'Payer, OMNY', emoji: '💳', color: '#ffb734', use: 'Payer sans contact avec le téléphone, y compris le métro et le bus : il suffit de le poser sur le lecteur OMNY, sans acheter de ticket. Le plafond hebdomadaire s’applique si vous utilisez toujours le même téléphone.\nÀ noter : Vanessa prononce « Valette ». Lançons la mode.' },
+  { id: 'yelp', pkg: 'com.yelp.android', name: 'Yelp', desc: 'Restos, avis', emoji: '⭐', color: '#ff7a59', use: 'Trouver restaurants, bars, cafés et magasins autour de vous, avec les avis, les photos, les prix et les horaires d’ouverture.' },
+  { id: 'opentable', pkg: 'com.opentable', name: 'OpenTable', desc: 'Réserver un resto', emoji: '🍽️', color: '#ff9e9e', use: 'Réserver une table au restaurant, voir les créneaux libres et annuler en quelques secondes. Utile pour les adresses très demandées, à réserver plusieurs semaines à l’avance.' },
+  { id: 'todaytix', pkg: 'com.todaytix.TodayTix', name: 'TodayTix', desc: 'Billets de spectacles', emoji: '🎭', color: '#f6a6ff', use: 'Billets de Broadway et d’autres spectacles, souvent moins chers. Le jour même, places « Rush » à prix réduit et loteries pour les spectacles complets.' },
 ];
 const appInstalled = new Map(); // pkg → true / false (APK seulement)
 const playUrl = (pkg) => `https://play.google.com/store/apps/details?id=${pkg}`;
 
 // Applis affichées : celles de la liste cochées, puis celles ajoutées depuis le téléphone.
-const customApp = (c) => ({ id: `c:${c.pkg}`, pkg: c.pkg, name: c.name, desc: 'Mon appli', use: 'appli ajoutée depuis votre téléphone', emoji: '📱', color: '#7a8499', custom: true });
+const customApp = (c) => ({ id: `c:${c.pkg}`, pkg: c.pkg, name: c.name, desc: 'Mon appli', use: 'Appli ajoutée depuis votre téléphone. Pour la retirer, allez dans Réglages, rubrique Navigation, « Mes applis ».', emoji: '📱', color: '#7a8499', custom: true });
 const appById = (id) => APPS.find((a) => a.id === id)
   || (id.startsWith('c:') && state.settings.customApps.some((c) => `c:${c.pkg}` === id) ? customApp(state.settings.customApps.find((c) => `c:${c.pkg}` === id)) : null);
 // Applis affichées dans l'ordre choisi ; dans l'APK, celles qui ne sont pas installées passent à la fin.
+// Option « masquer les applis non installées » : elles disparaissent de la page.
 const shownApps = () => {
   const list = state.settings.apps.map(appById).filter(Boolean);
-  return [...list.filter((a) => appInstalled.get(a.pkg) !== false), ...list.filter((a) => appInstalled.get(a.pkg) === false)];
+  const missing = list.filter((a) => appInstalled.get(a.pkg) === false);
+  return [...list.filter((a) => appInstalled.get(a.pkg) !== false), ...(state.settings.hideMissing ? [] : missing)];
 };
 const appIcons = new Map(); // pkg → icône officielle (data URL), lue sur le téléphone
 
@@ -1875,7 +2101,7 @@ async function renderApps() {
   const grid = $('apps-grid');
   const draw = () => {
     const list = shownApps();
-    grid.replaceChildren(...list.map((a) => {
+    const tile = (a) => {
       const missing = appInstalled.get(a.pkg) === false;
       const b = document.createElement('button');
       b.type = 'button';
@@ -1895,16 +2121,28 @@ async function renderApps() {
       info.setAttribute('aria-label', `À quoi sert ${a.name}`);
       info.addEventListener('click', (e) => {
         e.stopPropagation();
-        showInfo(a.name, [a.use[0].toUpperCase() + a.use.slice(1) + '.', missing ? 'Application non installée : touchez la vignette pour l’installer depuis le Play Store.' : 'Touchez la vignette pour l’ouvrir.']);
+        showInfo(a.name, [...a.use.split('\n'), missing ? 'Application non installée : touchez la vignette pour l’installer depuis le Play Store.' : 'Touchez la vignette pour l’ouvrir.']);
       });
       b.append(appIconEl(a), name, desc, info);
       b.addEventListener('click', () => launchApp(a));
       return b;
+    };
+    // Deux groupes : applis suggérées, puis celles ajoutées depuis le téléphone
+    const groups = [['Applis suggérées', list.filter((a) => !a.custom)], ['Mes applis', list.filter((a) => a.custom)]];
+    grid.replaceChildren(...groups.filter(([, l]) => l.length).flatMap(([title, l]) => {
+      const h = document.createElement('h3');
+      h.className = 'apps-group';
+      h.textContent = title;
+      const g = document.createElement('div');
+      g.className = 'apps-tiles';
+      g.append(...l.map(tile));
+      return [h, g];
     }));
     $('apps-note').textContent = !list.length
-      ? 'Aucune appli choisie : cochez-en dans les Réglages.'
-      : IS_NATIVE
+      ? 'Aucune appli à afficher : choisissez-en dans les Réglages.'
+      : IS_NATIVE && !state.settings.hideMissing
         ? 'Grisée, application non installée : touchez-la pour l’installer depuis le Play Store. Choix des applis dans les Réglages.'
+        : IS_NATIVE ? 'Choix des applis dans les Réglages.'
         : 'Touchez une appli pour l’ouvrir, ou l’installer depuis le Play Store. Choix des applis dans les Réglages.';
   };
   draw();
@@ -1912,25 +2150,26 @@ async function renderApps() {
   draw();
 }
 
-// Réglages : applis cochées dans l'ordre d'affichage (▲ ▼), puis celles de la liste non cochées.
+// Réglages : « Applis suggérées » (à cocher) et « Mes applis » (ajoutées), chacune dans son ordre (▲ ▼).
 function renderAppsChoice() {
-  const box = $('apps-choice');
-  const sel = state.settings.apps;
   const save = () => { store.set('settings', state.settings); renderAppsChoice(); haptic(); };
-  const rows = [...sel.map(appById).filter(Boolean), ...APPS.filter((a) => !sel.includes(a.id))];
-  box.replaceChildren(...rows.map((a) => {
+  const row = (a, group) => {
+    const sel = state.settings.apps;
     const on = sel.includes(a.id);
-    const i = sel.indexOf(a.id);
     const li = document.createElement('li');
     li.className = on ? 'on' : '';
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.checked = on;
-    check.setAttribute('aria-label', `Afficher ${a.name}`);
-    check.addEventListener('change', () => {
-      state.settings.apps = on ? sel.filter((id) => id !== a.id) : [...sel, a.id];
-      save();
-    });
+    if (!a.custom) {
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.checked = on;
+      check.setAttribute('aria-label', `Afficher ${a.name}`);
+      check.addEventListener('change', () => {
+        state.settings.apps = on ? sel.filter((id) => id !== a.id) : [...sel, a.id];
+        save();
+      });
+      li.append(check);
+      li.addEventListener('click', (e) => { if (!e.target.closest('button, input')) check.click(); });
+    }
     const icon = document.createElement('span');
     icon.className = 'pick-icon';
     const official = appIcons.get(a.pkg);
@@ -1938,15 +2177,22 @@ function renderAppsChoice() {
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = a.name;
-    li.append(check, icon, name);
+    li.append(icon, name);
     if (on) {
+      // Ordre : échange avec la voisine du même groupe
+      const ids = group.filter((x) => sel.includes(x.id)).map((x) => x.id);
+      const k = ids.indexOf(a.id);
       const move = (d, label, text) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.textContent = text;
-        b.disabled = !sel[i + d];
+        b.disabled = !ids[k + d];
         b.setAttribute('aria-label', `${label} : ${a.name}`);
-        b.addEventListener('click', () => { [sel[i], sel[i + d]] = [sel[i + d], sel[i]]; save(); });
+        b.addEventListener('click', () => {
+          const i = sel.indexOf(a.id), j = sel.indexOf(ids[k + d]);
+          [sel[i], sel[j]] = [sel[j], sel[i]];
+          save();
+        });
         return b;
       };
       li.append(move(-1, 'Monter', '▲'), move(1, 'Descendre', '▼'));
@@ -1960,15 +2206,21 @@ function renderAppsChoice() {
         state.settings.customApps = state.settings.customApps.filter((c) => c.pkg !== a.pkg);
         state.settings.apps = sel.filter((id) => id !== a.id);
         save();
-        toast(`${a.name} retirée des applis utiles`);
+        toast(`${a.name} retirée de mes applis`);
       });
       li.append(del);
     }
-    // Case à cocher sur toute la ligne (hors boutons)
-    li.addEventListener('click', (e) => { if (!e.target.closest('button, input')) check.click(); });
     return li;
-  }));
+  };
+  const sel = state.settings.apps;
+  const suggested = [...sel.map(appById).filter((a) => a && !a.custom), ...APPS.filter((a) => !sel.includes(a.id))];
+  const mine = state.settings.customApps.map(customApp).sort((x, y) => sel.indexOf(x.id) - sel.indexOf(y.id));
+  $('apps-choice').replaceChildren(...suggested.map((a) => row(a, suggested)));
+  $('my-apps').replaceChildren(...mine.map((a) => row(a, mine)));
+  $('my-apps-empty').hidden = mine.length > 0;
+  $('my-apps-box').hidden = !IS_NATIVE && !mine.length;
   $('app-add').hidden = !IS_NATIVE;
+  $('opt-hide-missing').checked = state.settings.hideMissing;
 }
 
 // « Ajouter une appli » : liste des applis du téléphone, avec leur icône et une recherche.
@@ -2125,7 +2377,7 @@ async function processPhoto(src, { sx, sy, sw, sh }) {
 
 // --- Recadrage : la photo couvre tout l'écran, on la déplace et on zoome ----------
 
-const crop = { iw: 0, ih: 0, s: 1, min: 1, tx: 0, ty: 0, pts: new Map(), done: null };
+const crop = { iw: 0, ih: 0, s: 1, min: 1, tx: 0, ty: 0, pts: new Map(), done: null, src: null, url: null };
 
 function cropClamp() {
   const W = innerWidth, H = innerHeight;
@@ -2158,21 +2410,46 @@ function cropFinish(rect) {
   done?.(rect);
 }
 
-// Ouvre l'écran de recadrage ; renvoie la zone choisie (pixels de la source) ou null si annulé.
-async function openCrop(src) {
+// Affiche une image dans l'écran de recadrage, cadrée pour couvrir l'écran.
+async function cropLoad(src) {
   const img = $('crop-img');
-  const url = URL.createObjectURL(src);
-  img.src = url;
-  try { await img.decode(); } catch { URL.revokeObjectURL(url); return null; }
+  const old = crop.url;
+  crop.src = src;
+  crop.url = URL.createObjectURL(src);
+  img.src = crop.url;
+  await img.decode();
+  if (old) URL.revokeObjectURL(old);
   crop.iw = img.naturalWidth; crop.ih = img.naturalHeight;
   img.style.width = `${crop.iw}px`; img.style.height = `${crop.ih}px`;
   crop.min = Math.max(innerWidth / crop.iw, innerHeight / crop.ih);
   crop.pts.clear();
   cropReset();
+}
+
+// Rotation d'un quart de tour (1 : sens horaire, -1 : sens inverse) ; l'image tournée devient la source.
+async function cropRotate(dir) {
+  const bmp = await createImageBitmap(crop.src);
+  const c = document.createElement('canvas');
+  c.width = bmp.height; c.height = bmp.width;
+  const g = c.getContext('2d');
+  g.translate(c.width / 2, c.height / 2);
+  g.rotate(dir * Math.PI / 2);
+  g.drawImage(bmp, -bmp.width / 2, -bmp.height / 2);
+  bmp.close?.();
+  await cropLoad(await canvasBlob(c, 0.9));
+  haptic();
+}
+
+// Ouvre l'écran de recadrage ; renvoie { rect, src } (zone en pixels de la source, éventuellement tournée) ou null si annulé.
+async function openCrop(src) {
+  try { await cropLoad(src); } catch { return null; }
   openView('crop-view');
   const rect = await new Promise((resolve) => { crop.done = resolve; });
+  const result = rect && { rect, src: crop.src };
+  const url = crop.url;
+  crop.url = null;
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return rect;
+  return result;
 }
 
 function initCrop() {
@@ -2203,6 +2480,8 @@ function initCrop() {
   stage.addEventListener('dblclick', cropReset);
   $('crop-zoom').addEventListener('input', () => cropZoom(crop.min * Number($('crop-zoom').value) / 100));
   $('crop-reset').addEventListener('click', () => { cropReset(); haptic(); });
+  $('crop-left').addEventListener('click', () => cropRotate(-1));
+  $('crop-right').addEventListener('click', () => cropRotate(1));
   $('crop-cancel').addEventListener('click', () => history.back());
   $('crop-ok').addEventListener('click', () => {
     cropFinish({ sx: -crop.tx / crop.s, sy: -crop.ty / crop.s, sw: innerWidth / crop.s, sh: innerHeight / crop.s });
@@ -2213,9 +2492,9 @@ function initCrop() {
 async function addCustomWallpaper(file) {
   if (customWps.length >= CUSTOM_MAX) { toast(`${CUSTOM_MAX} photos maximum : supprimez-en une d'abord`); return; }
   try {
-    const src = await photoSource(file);
-    const rect = await openCrop(src);
-    if (!rect) return;
+    const picked = await openCrop(await photoSource(file));
+    if (!picked) return;
+    const { rect, src } = picked;
     toast('Préparation de la photo…');
     const { blob, thumb, tone } = await processPhoto(src, rect);
     const id = `custom-${uid()}`;
@@ -2242,9 +2521,10 @@ async function recropCustomWallpaper(id) {
   try {
     const src = (await wpDb.get(`${id}-src`)) || (await wpDb.get(id));
     if (!src) throw new Error('photo introuvable');
-    const rect = await openCrop(src);
-    if (!rect) return;
-    const { blob, thumb, tone } = await processPhoto(src, rect);
+    const picked = await openCrop(src);
+    if (!picked) return;
+    const { blob, thumb, tone } = await processPhoto(picked.src, picked.rect);
+    if (picked.src !== src) await wpDb.put(`${id}-src`, picked.src); // photo tournée : nouvel original
     await wpDb.put(id, blob);
     const old = customUrls.get(id);
     customUrls.set(id, URL.createObjectURL(blob));
@@ -2292,6 +2572,7 @@ function setFrostLevel(v, dur = 0) {
   root.transition = dur ? `--glass-a ${dur}s ease-in-out, --blur ${dur}s ease-in-out` : 'none';
   root.setProperty('--glass-a', (0.85 * v / 100).toFixed(3));
   root.setProperty('--blur', `${(28 * v / 100).toFixed(1)}px`);
+  root.setProperty('--halo', (Math.max(0, 60 - v) / 60).toFixed(2)); // halo du texte sous 60 % de givré
 }
 
 // Givré animé : toutes les « every » s, de « from » à « to » en « dur » s, puis retour à « from ».
@@ -2318,16 +2599,25 @@ function renderFrostAnim() {
   $('frost-fixed').hidden = a.on;
   for (const k of ['every', 'from', 'to', 'dur']) $(`fa-${k}`).value = a[k];
   $('fa-every-v').textContent = `${a.every} s`;
-  $('fa-from-v').textContent = a.from;
-  $('fa-to-v').textContent = a.to;
+  $('fa-from-v').textContent = `${a.from} %`;
+  $('fa-to-v').textContent = `${a.to} %`;
   $('fa-dur-v').textContent = `${a.dur} s`;
   const every = Math.max(a.every, 2 * a.dur + 1);
-  $('fa-note').textContent = `Toutes les ${every} s, le givré passe de ${a.from} à ${a.to} en ${a.dur} s, puis revient à ${a.from} en ${a.dur} s.`
-    + (every > a.every ? ' (Délai allongé pour laisser le temps à l’aller-retour.)' : '');
+  $('fa-note').textContent = `Le givré reste à ${a.from} %. Toutes les ${every} s, il passe à ${a.to} % en ${a.dur} s`
+    + (a.to < a.from ? ' (la photo apparaît mieux)' : a.to > a.from ? ' (les cartes se givrent davantage)' : '')
+    + `, puis revient à ${a.from} % en ${a.dur} s.`
+    + (every > a.every ? ' Délai allongé pour laisser le temps à l’aller-retour.' : '')
+    + ' L’animation s’arrête quand l’appli est en arrière-plan.';
 }
 
 function initFrostAnim() {
   renderFrostAnim();
+  // Économie de batterie : pas d'animation quand l'appli n'est pas à l'écran.
+  document.addEventListener('visibilitychange', () => {
+    if (!state.settings.frostAnim.on) return;
+    if (document.visibilityState === 'hidden') { clearInterval(frostTimer); clearTimeout(frostBack); setFrostLevel(state.settings.frostAnim.from); }
+    else applyFrost();
+  });
   $('opt-frost-anim').addEventListener('change', () => {
     state.settings.frostAnim.on = $('opt-frost-anim').checked;
     store.set('settings', state.settings);
@@ -2636,6 +2926,7 @@ const VOICE_CATEGORIES = [
   { id: 'clothes', words: ['vêtement', 'vetement', 'habit', 'chaussure', 'basket', 'jean', 'pull', 'veste', 'clothes', 'clothing', 'shoe', 'sneaker', 'apparel', 'shirt'] },
   { id: 'food', words: ['resto', 'restaurant', 'repas', 'dîner', 'diner', 'déjeuner', 'dejeuner', 'brunch', 'bar', 'café', 'meal', 'dinner', 'lunch', 'breakfast'] },
   { id: 'grocery', words: ['épicerie', 'epicerie', 'supermarché', 'supermarche', 'pharmacie', 'médicament', 'medicament', 'courses', 'grocery', 'groceries', 'supermarket', 'pharmacy', 'drugstore', 'medicine'] },
+  { id: 'hotel', words: ['hôtel', 'hotel', 'nuit', 'nuitée', 'chambre', 'airbnb', 'night', 'room'] },
   { id: 'transport', words: ['taxi', 'uber', 'lyft', 'métro', 'metro', 'subway', 'bus', 'ferry', 'transport', 'course', 'cab'] },
   { id: 'shop', words: ['shopping', 'souvenir', 'boutique', 'magasin', 'cadeau', 'store', 'shop', 'gift'] },
   { id: 'other', words: ['autre', 'other', 'divers', 'misc'] },
@@ -2793,6 +3084,7 @@ function init() {
   // Menu de l'écran principal (à la place de l'ancien bouton Réglages)
   $('menu-open').addEventListener('click', () => {
     if (!$('main-menu').hidden) { history.back(); return; }
+    renderMenu();
     openView('main-menu', false);
     $('menu-open').setAttribute('aria-expanded', 'true');
     haptic();
@@ -2800,14 +3092,16 @@ function init() {
   document.addEventListener('click', (e) => {
     if (!$('main-menu').hidden && openViews.at(-1)?.id === 'main-menu' && !e.target.closest('#main-menu, #menu-open')) history.back();
   });
-  $('menu-cart').addEventListener('click', () => openView('cart-view'));
-  $('menu-saved').addEventListener('click', () => openView('saved-view'));
-  $('settings-open').addEventListener('click', () => {
-    openView('settings-view');
-    checkApps([...APPS, ...state.settings.customApps.map(customApp)]).then(renderAppsChoice); // icônes du téléphone
-  });
-  $('apps-open').addEventListener('click', () => { openView('apps-view'); renderApps(); });
+  trackMastHeight();
+  initCalc();
+  initBackButton();
+  initInfoDialog();
   $('app-add').addEventListener('click', openAppPicker);
+  $('opt-hide-missing').addEventListener('change', () => {
+    state.settings.hideMissing = $('opt-hide-missing').checked;
+    store.set('settings', state.settings);
+    haptic();
+  });
   initFrostAnim();
   $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
   // Retour dans l'appli : une appli a peut-être été installée entre-temps.

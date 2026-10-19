@@ -45,7 +45,7 @@ await p.click('#tip-choices .chip:has-text("18")'); await p.waitForTimeout(200);
 ok(`18 %: ${await p.textContent('#b-tip')}`, (await p.textContent('#b-tip')).startsWith('$18.00'));
 await p.screenshot({ path: `${out}/ecran-${scheme}.png` });
 // Réglages : mise à jour manuelle du cours, titres en gothique
-await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#menu-settings'); await p.waitForTimeout(400);
 ok(`titre gothique: ${await p.$eval('#settings-title', (e) => getComputedStyle(e).fontFamily)}`, (await p.$eval('#settings-title', (e) => getComputedStyle(e).fontFamily)).includes('Manufacturing Consent'));
 ok(`date du cours: ${await p.textContent('#rate-checked')}`, (await p.textContent('#rate-checked')).includes('vendredi 16 octobre'));
 await p.click('#rate-refresh'); await p.waitForTimeout(400);
@@ -68,7 +68,7 @@ await p.evaluate(() => {
     start() { setTimeout(() => { this.onresult?.({ results: [[{ transcript: 'Genève' }]] }); this.onend?.(); }, 50); }
   };
 });
-await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(300);
+await p.click('#menu-open'); await p.click('#menu-settings'); await p.waitForTimeout(300);
 await p.click('#city-voice'); await p.waitForTimeout(500);
 ok(`dictée: ${await p.textContent('#clock-home')}`, (await p.textContent('#clock-home')).startsWith('Genève') && (await p.inputValue('#set-city')) === 'Genève');
 // Géolocalisation : Lyon (position et nom de ville simulés)

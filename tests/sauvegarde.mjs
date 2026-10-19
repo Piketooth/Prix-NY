@@ -16,17 +16,21 @@ const keys = async (s) => { for (const ch of s) await p.click(`[data-key="${ch =
 const cls = () => p.evaluate(() => document.documentElement.className + ' | ' + document.body.className);
 const tileLabels = () => p.$$eval('#wp-gallery .wp-label', l => l.map(x => x.textContent));
 
-ok(`titre: ${await p.textContent('.mast-title')}`, (await p.textContent('.mast-title')) === 'Vrai Prix New York');
+ok(`titre: ${await p.textContent('.mast-title')}`, (await p.textContent('.mast-title')) === 'New York');
 ok(`édition: ${await p.textContent('.mast-edition')}`, /1 \$ = 0,9 €/.test(await p.textContent('#rate-info')));
 
 // --- Fond personnalisé
-await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#menu-settings'); await p.waitForTimeout(400);
 let tiles = await tileLabels();
 const base = tiles.length;
 ok(`tuiles: ${base}, Ma photo`, tiles.includes('Ma photo'));
 await p.setInputFiles('#wp-file', `${FIX}/bright.jpg`);
 await p.waitForSelector('#crop-view:not([hidden])');
 ok('écran de recadrage', await p.isVisible('#crop-img'));
+const dim0 = await p.evaluate(() => [crop.iw, crop.ih]);
+await p.click('#crop-right'); await p.waitForTimeout(500);
+const dim1 = await p.evaluate(() => [crop.iw, crop.ih]);
+ok(`rotation: ${dim0} → ${dim1}`, dim0[0] === dim1[1] && dim0[1] === dim1[0]);
 // zoom ×2 puis glisser vers la gauche
 await p.fill('#crop-zoom', '200'); await p.dispatchEvent('#crop-zoom', 'input');
 const t1 = await p.$eval('#crop-img', (e) => e.style.transform);
@@ -59,7 +63,7 @@ await p.screenshot({ path: `${out}/v7-main-custom.png` });
 await p.reload(); await p.waitForTimeout(1500);
 const bg = await p.evaluate(() => [...document.querySelectorAll('*')].map(e => getComputedStyle(e).backgroundImage).filter(x => x.includes('blob:')).length);
 ok(`persistance après rechargement: ${bg} fond blob`, bg > 0);
-await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#menu-settings'); await p.waitForTimeout(400);
 await p.click('#wp-gallery .wp-tile .wp-del'); await p.waitForTimeout(500);
 tiles = await tileLabels();
 ok(`suppression: ${tiles.length}`, tiles.length === base + 1);

@@ -1,6 +1,6 @@
 {
-  "name": "Vrai Prix New York — dollars en euros",
-  "short_name": "Vrai Prix NY",
+  "name": "New York — dollars en euros",
+  "short_name": "New York",
   "description": "Convertit les prix de New York en euros, taxes et pourboire compris.",
   "lang": "fr",
   "start_url": "./",

@@ -58,7 +58,6 @@
         <package android:name="co.bytemark.nycf" />
         <package android:name="com.google.android.apps.translate" />
         <package android:name="com.google.android.apps.walletnfcrel" />
-        <package android:name="com.transferwise.android" />
         <package android:name="com.yelp.android" />
         <package android:name="com.opentable" />
         <package android:name="com.todaytix.TodayTix" />

@@ -26,5 +26,11 @@
       0.25
     ],
     "default": 0.2
+  },
+  "hotel": {
+    "label": "Hôtel",
+    "rate": 0.1475,
+    "perNight": 3.5,
+    "detail": "Sales tax 8,875 % + taxe hôtelière NYC 5,875 % ; 2 $ (État) + 1,50 $ (Javits Center) par chambre et par nuit"
   }
 }

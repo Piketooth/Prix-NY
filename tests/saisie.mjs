@@ -27,7 +27,7 @@ const close = async () => { if (await p.isVisible('#keypad')) { await p.goBack()
 
 // 1, 5, 6. catégories
 const labels = await p.$$eval('.cat', (els) => els.map((e) => e.textContent));
-ok(`catégories: ${labels.join(' | ')}`, labels.length === 6 && labels[4].includes('Transport') && labels[1].includes('Vêtements et chaussures') && labels[3].includes('Épicerie / Pharmacie') && !labels.some((l) => /Visites/.test(l)));
+ok(`catégories: ${labels.join(' | ')}`, labels.length === 7 && labels[4].includes('Transport') && labels[5].includes('Hôtel') && labels[1].includes('Vêtements et chaussures') && labels[3].includes('Épicerie / Pharmacie') && !labels.some((l) => /Visites/.test(l)));
 const vis = await p.$$eval('.cat', (els) => els.every((e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; }));
 ok('toutes visibles', vis);
 // 2. bas d'écran
@@ -82,7 +82,7 @@ await p.click('#toast-action'); await p.waitForTimeout(100);
 sv = await p.evaluate(() => JSON.parse(localStorage.getItem('savedCarts')));
 ok('annulation ajouter à', sv[0].items.length === 2);
 // 9. taux personnalisé
-await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(400);
+await p.click('#menu-open'); await p.click('#menu-settings'); await p.waitForTimeout(400);
 ok(`placeholder taux: ${await p.getAttribute('#set-rate', 'placeholder')}`, (await p.getAttribute('#set-rate', 'placeholder')) === '0,9');
 await p.fill('#set-rate', '0,95');
 await p.screenshot({ path: `${out}/v4-settings-${scheme}.png`, fullPage: false });
@@ -90,7 +90,7 @@ ok(`en-tête: ${await p.textContent('#rate-info')}`, (await p.textContent('#rate
 await p.goBack(); await p.waitForTimeout(200);
 await p.click('#price'); await keys('100'); await close();
 m = await main(); ok(`100 $ à 0,95 → ${m}`, m === '103,43 €');
-await p.click('#menu-open'); await p.click('#settings-open'); await p.waitForTimeout(300);
+await p.click('#menu-open'); await p.click('#menu-settings'); await p.waitForTimeout(300);
 await p.click('#rate-reset');
 ok(`retour officiel: ${await p.textContent('#rate-info')}`, !(await p.textContent('#rate-info')).includes('personnalisé'));
 // 3 + 8. réglages son et langue
