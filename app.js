@@ -73,7 +73,8 @@ const state = {
     // niveaux en % des réglages Flou et Opacité (100 % = réglages, 0 % = cartes transparentes)
     frostAnim: { on: false, every: 20, from: 100, to: 0, dur: 2 },
     tint: null, // teinte du givré (#rrggbb) ; null = neutre
-    glow: 100 }, // ombres et lueurs : 100 % = dosage automatique
+    glow: 100, // ombres et lueurs : 100 % = dosage automatique
+    wxModel: 'best_match' }, // source météo : modèle de prévision Open-Meteo
 };
 
 const store = {
@@ -331,7 +332,7 @@ const PAGE_INFO = {
   settings: ['Réglages', [
     'Tout ce qui personnalise l’appli. Les réglages restent sur le téléphone.',
     ['Argent', 'cours officiel de la BCE mis à jour automatiquement, ou votre propre taux ; frais bancaires de votre carte ; sales tax de New York et ses exonérations.'],
-    ['Heure', 'ville dont l’heure s’affiche sous le titre, à côté de celle de New York. Le bouton position envoie votre position approximative au service BigDataCloud pour trouver le nom de la ville, et seulement à ce moment-là. Une ville absente de la liste intégrée est cherchée chez Open-Meteo.'],
+    ['Heure et météo', 'source des prévisions (NOAA, ECMWF, Météo-France…) ; ville dont l’heure s’affiche sous le titre, à côté de celle de New York. Le bouton position envoie votre position approximative au service BigDataCloud pour trouver le nom de la ville, et seulement à ce moment-là. Une ville absente de la liste intégrée est cherchée chez Open-Meteo.'],
     ['Saisie', 'langue de la dictée des prix et des villes, son au démarrage.'],
     ['Navigation', 'ordre des écrans quand on fait glisser le doigt ; applis affichées dans la page Applis utiles, leur ordre, vos propres applis, et masquer celles qui ne sont pas installées.'],
     ['Apparence', 'fond d’écran (photos de New York ou les vôtres), couleurs adaptées à la photo, givré fixe ou animé (flou, opacité, teinte), ombres et lueurs.'],
@@ -485,6 +486,40 @@ function renderClocks() {
 const NY_COORDS = { lat: 40.7128, lon: -74.006 };
 const weather = { ny: null, at: 0 };
 
+// Sources au choix : modèles de prévision servis par Open-Meteo (tous gratuits, sans clé).
+const WX_SOURCES = [
+  { v: 'best_match', label: 'Automatique', note: 'Open-Meteo choisit le meilleur modèle pour New York (en général celui de la NOAA à haute résolution).' },
+  { v: 'gfs_seamless', label: 'NOAA (États-Unis)', note: 'Service météo américain : modèles GFS et HRRR, très fins sur New York.' },
+  { v: 'ecmwf_ifs025', label: 'ECMWF (Europe)', note: 'Centre européen, souvent le plus juste à plusieurs jours ; pas de risque de pluie heure par heure.' },
+  { v: 'meteofrance_seamless', label: 'Météo-France', note: 'Modèle mondial ARPEGE de Météo-France ; pas de risque de pluie heure par heure.' },
+  { v: 'icon_seamless', label: 'DWD (Allemagne)', note: 'Modèle ICON du service météo allemand.' },
+  { v: 'gem_seamless', label: 'Canada', note: 'Modèle GEM d’Environnement Canada, voisin de New York.' },
+];
+const wxModel = () => (state.settings.wxModel === 'best_match' ? '' : `&models=${state.settings.wxModel}`);
+const wxSourceLabel = () => (WX_SOURCES.find((o) => o.v === state.settings.wxModel) || WX_SOURCES[0]).label;
+
+function renderWxSource() {
+  const box = $('wx-source');
+  box.replaceChildren(...WX_SOURCES.map((o) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(state.settings.wxModel === o.v));
+    b.textContent = o.label;
+    b.addEventListener('click', () => {
+      state.settings.wxModel = o.v;
+      store.set('settings', state.settings);
+      forecast.d = null; // prévisions rechargées avec la nouvelle source
+      loadWeather();
+      renderWxSource();
+      haptic();
+    });
+    return b;
+  }));
+  $('wx-source-note').textContent = (WX_SOURCES.find((o) => o.v === state.settings.wxModel) || WX_SOURCES[0]).note;
+}
+
 function weatherIcon(code, day) {
   if (code === 0) return day ? '☀️' : '🌙';
   if (code <= 2) return day ? '🌤️' : '☁️';
@@ -501,7 +536,7 @@ async function loadWeather() {
   weather.at = Date.now();
   try {
     const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${NY_COORDS.lat}&longitude=${NY_COORDS.lon}`
-      + '&current=temperature_2m,weather_code,is_day&daily=temperature_2m_min,temperature_2m_max&timezone=auto&forecast_days=1');
+      + '&current=temperature_2m,weather_code,is_day&daily=temperature_2m_min,temperature_2m_max&timezone=auto&forecast_days=1' + wxModel());
     weather.ny = { temp: d.current.temperature_2m, code: d.current.weather_code, day: d.current.is_day === 1, min: d.daily.temperature_2m_min[0], max: d.daily.temperature_2m_max[0] };
   } catch { /* hors ligne */ }
   renderClocks();
@@ -521,7 +556,7 @@ async function fetchForecast() {
     + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m'
     + '&hourly=temperature_2m,weather_code,precipitation_probability'
     + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max'
-    + '&timezone=auto&forecast_days=7');
+    + '&timezone=auto&forecast_days=7' + wxModel());
   Object.assign(forecast, { at: Date.now(), d });
   return d;
 }
@@ -640,6 +675,8 @@ async function renderWeather() {
   const ymd0 = d?.daily.time[0] || nyDate();
   const ymd1 = d?.daily.time[1] || nyDate(1);
   days.replaceChildren(renderDayCard('Aujourd’hui', ymd0, d), renderDayCard('Demain', ymd1, d));
+  $('wx-note').textContent = `New York. Source : ${wxSourceLabel()} via Open-Meteo (à changer dans les Réglages), mise à jour toutes les 30 minutes. `
+    + 'Heure bleue : soleil entre 6° et 4° sous l’horizon ; heure dorée : de 4° sous l’horizon à 6° au-dessus.';
   if (!d) return;
   const c = d.current;
   const dl = d.daily;
@@ -1888,6 +1925,7 @@ function initSettings() {
     const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
     state.settings.apps = [...apps, ...custom.filter((id) => !apps.includes(id))];
     if (/^#[0-9a-f]{6}$/i.test(s.tint || '')) state.settings.tint = s.tint;
+    if (WX_SOURCES.some((o) => o.v === s.wxModel)) state.settings.wxModel = s.wxModel;
     if (Number.isFinite(s.glow)) state.settings.glow = Math.min(200, Math.max(0, s.glow));
     if (s.frostAnim) {
       const f = s.frostAnim, num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
@@ -3536,6 +3574,7 @@ function init() {
   trackMastHeight();
   initMast();
   initMaps();
+  renderWxSource();
   initNetTools();
   initCalc();
   initBackButton();

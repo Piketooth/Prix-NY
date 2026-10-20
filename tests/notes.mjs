@@ -117,5 +117,13 @@ const chips = await p.$$eval('#city-suggest .chip', (l) => l.map((x) => x.textCo
 ok(`recherche en ligne: ${chips.join(', ')}`, chips.includes('Vannes · Morbihan') && geo === 1);
 await p.click('#city-suggest .chip:has-text("Morbihan")'); await p.waitForTimeout(200);
 ok('ville choisie avec ses coordonnées', await p.evaluate(() => state.settings.clock.label === 'Vannes' && state.settings.clock.lat === 47.66));
+// Source météo
+let models = '';
+await p.route('https://api.open-meteo.com/**', (r) => { models = new URL(r.request().url()).searchParams.get('models') || ''; r.fallback(); });
+ok('source automatique par défaut', (await p.getAttribute('#wx-source .chip:has-text("Automatique")', 'aria-checked')) === 'true');
+await p.click('#wx-source .chip:has-text("Météo-France")'); await p.waitForTimeout(400);
+ok(`source Météo-France: ${models}`, models === 'meteofrance_seamless' && (await p.textContent('#wx-source-note')).includes('ARPEGE'));
+await p.evaluate(() => menuGo('weather')); await p.waitForTimeout(500);
+ok(`source citée: ${await p.textContent('#wx-note')}`, (await p.textContent('#wx-note')).includes('Source : Météo-France') && models === 'meteofrance_seamless');
 ok(`${scheme} erreurs JS: ${errs}`, errs.length === 0);
 await b.close();
