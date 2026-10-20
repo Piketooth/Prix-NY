@@ -34,7 +34,6 @@
       <div id="mast-toggle" class="mast-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="mast-more" aria-label="Afficher ou masquer le détail du bandeau">
         <h1 class="mast-title">New York</h1>
         <span class="mast-mini"><span class="mini-line"><span id="mini-time"></span><span id="mini-weather" class="wx-link" role="button" tabindex="0" aria-label="Météo" hidden></span></span><span id="mini-rate"></span></span>
-        <span class="mast-chevron" aria-hidden="true"></span>
       </div>
       <button id="menu-open" class="round-btn small" type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div id="main-menu" class="main-menu" role="menu" hidden></div>
@@ -50,11 +49,12 @@
       <span id="clock-home"></span>
     </p>
     <div id="mast-tools" class="mast-tools" hidden>
-      <button id="net-panel" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg><span>Wi-Fi et données</span></button>
-      <button id="net-roaming" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Itinérance</span></button>
+      <button id="shazam-now" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg><span>Shazam</span></button>
+      <button id="shazam-auto" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 3v6h-6"/><path d="M10 9v6l5-3z"/></svg><span>Auto Shazam</span></button>
     </div>
     </div>
     <div class="mast-rule double"></div>
+    <button id="mast-pull" class="mast-pull" type="button" aria-controls="mast-more" aria-label="Déplier ou replier le bandeau"><span class="mast-chevron" aria-hidden="true"></span></button>
   </header>
 
   <div class="cart-bar-wrap">
@@ -222,6 +222,11 @@
       <h2 id="apps-title">Applis utiles</h2>
     </div>
     <div class="apps-scroll">
+      <div id="net-tools" class="net-tools" hidden>
+        <button id="net-wifi" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg><span>Wi-Fi</span></button>
+        <button id="net-data" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20V8M4 12l4-4 4 4M16 4v12M12 12l4 4 4-4"/></svg><span>Données</span></button>
+        <button id="net-roaming" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Itinérance</span></button>
+      </div>
       <div id="apps-grid" class="apps-grid"></div>
       <p id="apps-note" class="note apps-note"></p>
     </div>
@@ -233,11 +238,30 @@
       <h2 id="weather-title">Météo</h2>
     </div>
     <div class="weather-scroll">
-      <div id="wx-city" class="segmented wx-city" role="radiogroup" aria-label="Ville"></div>
       <section id="wx-today" class="card glass wx-today" aria-live="polite"></section>
+      <div id="wx-days" class="wx-days"></div>
       <h3 class="apps-group">Cette semaine</h3>
       <ol id="wx-week" class="wx-week"></ol>
-      <p id="wx-note" class="note">Prévisions Open-Meteo, mises à jour toutes les 30 minutes.</p>
+      <p id="wx-note" class="note">New York. Prévisions Open-Meteo, mises à jour toutes les 30 minutes. Heure bleue : soleil entre 6° et 4° sous l’horizon ; heure dorée : de 4° sous l’horizon à 6° au-dessus.</p>
+    </div>
+  </section>
+
+  <section id="maps-view" class="sheet" hidden aria-labelledby="maps-title">
+    <div class="sheet-head">
+      <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <h2 id="maps-title">Plan</h2>
+    </div>
+    <div class="maps-body">
+      <div class="maps-bar">
+        <input id="maps-q" class="field" type="text" inputmode="none" data-kbd maxlength="80" placeholder="Adresse, lieu, magasin…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher sur la carte">
+        <button id="maps-go" class="round-btn small" type="button" aria-label="Rechercher"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+        <button id="maps-here" class="round-btn small" type="button" aria-label="Ma position"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg></button>
+      </div>
+      <iframe id="maps-frame" class="maps-frame card" title="Carte Google Maps" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+      <div class="maps-actions">
+        <button id="maps-route" class="btn" type="button">Itinéraire</button>
+        <button id="maps-open" class="btn secondary" type="button">Ouvrir Google Maps</button>
+      </div>
     </div>
   </section>
 
