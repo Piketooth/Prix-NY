@@ -64,7 +64,7 @@ const state = {
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
   settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, opacity: 64, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 3,
     // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
-    screens: ['main', 'apps', 'calc', 'cart', 'saved', 'weather', 'settings'],
+    screens: ['main', 'apps', 'calc', 'cart', 'saved', 'weather', 'maps', 'settings'],
     // apps : applis affichées, dans l'ordre choisi ; « c:paquet » pour celles ajoutées depuis le téléphone
     apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
     customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
@@ -73,7 +73,8 @@ const state = {
     // niveaux en % des réglages Flou et Opacité (100 % = réglages, 0 % = cartes transparentes)
     frostAnim: { on: false, every: 20, from: 100, to: 0, dur: 2 },
     tint: null, // teinte du givré (#rrggbb) ; null = neutre
-    glow: 100 }, // ombres et lueurs : 100 % = dosage automatique
+    glow: 100, // ombres et lueurs : 100 % = dosage automatique
+    wxModel: 'best_match' }, // source météo : modèle de prévision Open-Meteo
 };
 
 const store = {
@@ -331,10 +332,10 @@ const PAGE_INFO = {
   settings: ['Réglages', [
     'Tout ce qui personnalise l’appli. Les réglages restent sur le téléphone.',
     ['Argent', 'cours officiel de la BCE mis à jour automatiquement, ou votre propre taux ; frais bancaires de votre carte ; sales tax de New York et ses exonérations.'],
-    ['Heure', 'ville dont l’heure s’affiche sous le titre, à côté de celle de New York. Le bouton position envoie votre position approximative au service BigDataCloud pour trouver le nom de la ville, et seulement à ce moment-là.'],
+    ['Heure et météo', 'source des prévisions (NOAA, ECMWF, Météo-France…) ; ville dont l’heure s’affiche sous le titre, à côté de celle de New York. Le bouton position envoie votre position approximative au service BigDataCloud pour trouver le nom de la ville, et seulement à ce moment-là. Une ville absente de la liste intégrée est cherchée chez Open-Meteo.'],
     ['Saisie', 'langue de la dictée des prix et des villes, son au démarrage.'],
     ['Navigation', 'ordre des écrans quand on fait glisser le doigt ; applis affichées dans la page Applis utiles, leur ordre, vos propres applis, et masquer celles qui ne sont pas installées.'],
-    ['Apparence', 'fond d’écran (photos de New York ou les vôtres), couleurs adaptées à la photo, givré fixe ou animé.'],
+    ['Apparence', 'fond d’écran (photos de New York ou les vôtres), couleurs adaptées à la photo, givré fixe ou animé (flou, opacité, teinte), ombres et lueurs.'],
   ]],
 };
 
@@ -373,6 +374,21 @@ function renderEditionDate() {
 // --- Horloges du bandeau : New York et une ville au choix ---------------------
 
 const NY_TZ = 'America/New_York';
+// Préfectures et villes moyennes de France métropolitaine (recherche hors ligne) ; les autres via Open-Meteo.
+const FR_CITIES = ('Bourg-en-Bresse Laon Moulins Digne-les-Bains Gap Privas Charleville-Mézières Foix Troyes Carcassonne Rodez Caen '
+  + 'Aurillac Angoulême La Rochelle Bourges Tulle Bastia Dijon Saint-Brieuc Guéret Périgueux Besançon Valence Évreux Chartres Quimper '
+  + 'Brest Nîmes Auch Pau Bayonne Biarritz Béziers Châteauroux Tours Blois Saint-Étienne Le Puy-en-Velay Orléans Cahors Agen Mende '
+  + 'Angers Saint-Lô Cherbourg Châlons-en-Champagne Reims Chaumont Laval Nancy Bar-le-Duc Verdun Vannes Lorient Metz Nevers Arras '
+  + 'Calais Boulogne-sur-Mer Dunkerque Beauvais Alençon Clermont-Ferrand Tarbes Lourdes Perpignan Colmar Mulhouse Vesoul Mâcon Le Mans '
+  + 'Chambéry Annecy Rouen Le Havre Melun Versailles Niort Amiens Albi Montauban Toulon Avignon La Roche-sur-Yon Poitiers Limoges '
+  + 'Épinal Auxerre Belfort Évry Nanterre Bobigny Créteil Cergy Saint-Malo Saint-Nazaire Lannion Morlaix Auray Pontivy Concarneau '
+  + 'Dinan Fougères Vitré Redon Ploërmel Quiberon Carnac Douarnenez Cannes Antibes Fréjus Aix-en-Provence Arles Sète Narbonne '
+  + 'Annemasse Aix-les-Bains Vichy Roanne Villeurbanne Saint-Denis Boulogne-Billancourt Argenteuil Montreuil Roubaix Tourcoing '
+  + 'Dax Mont-de-Marsan Arcachon Royan Cognac Saintes Brive-la-Gaillarde Montluçon Thionville Haguenau Sarreguemines Deauville Honfleur '
+  + 'Lisieux Bayeux Granville Dieppe Fécamp Compiègne Soissons Saint-Quentin Valenciennes Douai Lens Cambrai Maubeuge Chamonix Sedan '
+  + 'Bergerac Sarlat Millau Castres Figeac Rochefort Les Sables-d’Olonne Cholet Saumur Chinon Amboise Vierzon Sens Beaune Dole Lons-le-Saunier '
+  + 'Pontarlier Montbéliard Saint-Dié-des-Vosges Lunéville Toul Épernay Vienne Montélimar Orange Carpentras Hyères Menton Grasse Draguignan '
+  + 'Manosque Briançon Porto-Vecchio Calvi Corte').split(' ');
 // Noms français et villes sans fuseau propre ; les autres villes sont cherchées dans les fuseaux du navigateur.
 const CITY_ALIASES = [
   ['Paris', 'Europe/Paris'], ['Lyon', 'Europe/Paris'], ['Marseille', 'Europe/Paris'], ['Toulouse', 'Europe/Paris'],
@@ -396,6 +412,7 @@ const CITY_ALIASES = [
   ['Saint-Denis (Réunion)', 'Indian/Reunion'], ['Mayotte', 'Indian/Mayotte'], ['Martinique', 'America/Martinique'],
   ['Fort-de-France', 'America/Martinique'], ['Guadeloupe', 'America/Guadeloupe'], ['Pointe-à-Pitre', 'America/Guadeloupe'],
   ['Cayenne', 'America/Cayenne'], ['Tahiti', 'Pacific/Tahiti'], ['Papeete', 'Pacific/Tahiti'], ['Nouméa', 'Pacific/Noumea'],
+  ...FR_CITIES.map((c) => [c, 'Europe/Paris']), // après les grandes villes dans les suggestions
 ];
 const normCity = (t) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[-_'’]/g, ' ').replace(/\s+/g, ' ').trim();
 let cityIndex = null;
@@ -442,33 +459,66 @@ function renderClocks() {
   const now = new Date();
   const time = (tz) => now.toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
   const { label, tz } = state.settings.clock;
-  const wNy = weatherText('ny');
-  // La météo est un lien vers la page Météo (ville correspondante)
-  const wx = (text, city) => {
+  const wNy = weatherText();
+  // La météo est un lien vers la page Météo
+  const wx = (text) => {
     const el = document.createElement('span');
     el.className = 'wx-link';
     el.setAttribute('role', 'button');
     el.tabIndex = 0;
-    el.dataset.city = city;
     el.textContent = text;
     return el;
   };
-  $('clock-ny').replaceChildren(`New York ${time(NY_TZ)}`, ...(wNy ? [wx(wNy, 'ny')] : []));
+  $('clock-ny').replaceChildren(`New York ${time(NY_TZ)}`, ...(wNy ? [wx(wNy)] : []));
   $('mini-time').textContent = `NY ${time(NY_TZ)}`;
-  $('mini-weather').textContent = wNy;
-  $('mini-weather').hidden = !wNy;
+  const w = weather.ny;
+  $('mini-weather').textContent = w ? `${wNy} · ${Math.round(w.min)}°/${Math.round(w.max)}°` : '';
+  $('mini-weather').hidden = !w;
   if (tz === NY_TZ) { $('clock-home').textContent = ''; return; }
   const diff = (tzOffset(tz, now) - tzOffset(NY_TZ, now)) / 60;
   const sign = diff >= 0 ? '+' : '−';
   const h = Math.abs(diff).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
-  const wHome = weatherText('home');
-  $('clock-home').replaceChildren(`${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}`, ...(wHome ? [wx(wHome, 'home')] : []));
+  $('clock-home').textContent = `${label} ${time(tz)} · ${diff ? `${sign}${h} h` : 'même heure'}`;
 }
 
-// --- Météo (Open-Meteo, gratuit, sans clé) : température et pictogramme à côté des horloges -----
+// --- Météo de New York (Open-Meteo, gratuit, sans clé) : dans le bandeau et sur la page Météo -----
 
 const NY_COORDS = { lat: 40.7128, lon: -74.006 };
-const weather = { ny: null, home: null, at: 0 };
+const weather = { ny: null, at: 0 };
+
+// Sources au choix : modèles de prévision servis par Open-Meteo (tous gratuits, sans clé).
+const WX_SOURCES = [
+  { v: 'best_match', label: 'Automatique', note: 'Open-Meteo choisit le meilleur modèle pour New York (en général celui de la NOAA à haute résolution).' },
+  { v: 'gfs_seamless', label: 'NOAA (États-Unis)', note: 'Service météo américain : modèles GFS et HRRR, très fins sur New York.' },
+  { v: 'ecmwf_ifs025', label: 'ECMWF (Europe)', note: 'Centre européen, souvent le plus juste à plusieurs jours ; pas de risque de pluie heure par heure.' },
+  { v: 'meteofrance_seamless', label: 'Météo-France', note: 'Modèle mondial ARPEGE de Météo-France ; pas de risque de pluie heure par heure.' },
+  { v: 'icon_seamless', label: 'DWD (Allemagne)', note: 'Modèle ICON du service météo allemand.' },
+  { v: 'gem_seamless', label: 'Canada', note: 'Modèle GEM d’Environnement Canada, voisin de New York.' },
+];
+const wxModel = () => (state.settings.wxModel === 'best_match' ? '' : `&models=${state.settings.wxModel}`);
+const wxSourceLabel = () => (WX_SOURCES.find((o) => o.v === state.settings.wxModel) || WX_SOURCES[0]).label;
+
+function renderWxSource() {
+  const box = $('wx-source');
+  box.replaceChildren(...WX_SOURCES.map((o) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(state.settings.wxModel === o.v));
+    b.textContent = o.label;
+    b.addEventListener('click', () => {
+      state.settings.wxModel = o.v;
+      store.set('settings', state.settings);
+      forecast.d = null; // prévisions rechargées avec la nouvelle source
+      loadWeather();
+      renderWxSource();
+      haptic();
+    });
+    return b;
+  }));
+  $('wx-source-note').textContent = (WX_SOURCES.find((o) => o.v === state.settings.wxModel) || WX_SOURCES[0]).note;
+}
 
 function weatherIcon(code, day) {
   if (code === 0) return day ? '☀️' : '🌙';
@@ -480,76 +530,154 @@ function weatherIcon(code, day) {
   if (code <= 77 || code === 85 || code === 86) return '🌨️';
   return '⛈️';
 }
-const weatherText = (k) => (weather[k] ? `${weatherIcon(weather[k].code, weather[k].day)} ${Math.round(weather[k].temp)}°` : '');
-
-async function fetchWeather({ lat, lon }) {
-  const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,is_day&timezone=auto`);
-  return { temp: d.current.temperature_2m, code: d.current.weather_code, day: d.current.is_day === 1 };
-}
-
-// Coordonnées de la deuxième ville : mémorisées (position, recherche) ou trouvées par son nom.
-async function homeCoords() {
-  const c = state.settings.clock;
-  if (Number.isFinite(c.lat) && Number.isFinite(c.lon)) return c;
-  const name = c.label.replace(/\s*\(.*\)$/, '');
-  const d = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=fr`);
-  const r = d.results?.[0];
-  if (!r) throw new Error('ville inconnue');
-  Object.assign(c, { lat: r.latitude, lon: r.longitude });
-  store.set('settings', state.settings);
-  return c;
-}
+const weatherText = () => (weather.ny ? `${weatherIcon(weather.ny.code, weather.ny.day)} ${Math.round(weather.ny.temp)}°` : '');
 
 async function loadWeather() {
   weather.at = Date.now();
-  try { weather.ny = await fetchWeather(NY_COORDS); } catch { /* hors ligne */ }
-  if (state.settings.clock.tz !== NY_TZ) {
-    try { weather.home = await fetchWeather(await homeCoords()); } catch { weather.home = null; }
-  }
+  try {
+    const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${NY_COORDS.lat}&longitude=${NY_COORDS.lon}`
+      + '&current=temperature_2m,weather_code,is_day&daily=temperature_2m_min,temperature_2m_max&timezone=auto&forecast_days=1' + wxModel());
+    weather.ny = { temp: d.current.temperature_2m, code: d.current.weather_code, day: d.current.is_day === 1, min: d.daily.temperature_2m_min[0], max: d.daily.temperature_2m_max[0] };
+  } catch { /* hors ligne */ }
   renderClocks();
 }
 
-// --- Page Météo : aujourd'hui en grand, la semaine en dessous --------------------
+// --- Page Météo (New York) : aujourd'hui en grand, matin / après-midi / soirée et soleil
+// pour aujourd'hui et demain, puis la semaine -------------------------------------------------
 
 const WX_DESC = [[0, 'Ciel dégagé'], [1, 'Plutôt dégagé'], [2, 'Partiellement nuageux'], [3, 'Couvert'], [48, 'Brouillard'], [55, 'Bruine'], [57, 'Bruine verglaçante'],
   [65, 'Pluie'], [67, 'Pluie verglaçante'], [75, 'Neige'], [77, 'Grains de neige'], [82, 'Averses'], [86, 'Averses de neige'], [99, 'Orage']];
 const wxDesc = (code) => (WX_DESC.find(([max]) => code <= max) || WX_DESC.at(-1))[1];
-const forecast = { city: 'ny', data: {} }; // data[city] = { at, d }
+const forecast = { at: 0, d: null };
 
-async function fetchForecast(city) {
-  const cached = forecast.data[city];
-  if (cached && Date.now() - cached.at < 30 * 60 * 1000) return cached.d;
-  const { lat, lon } = city === 'ny' ? NY_COORDS : await homeCoords();
-  const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+async function fetchForecast() {
+  if (forecast.d && Date.now() - forecast.at < 30 * 60 * 1000) return forecast.d;
+  const d = await fetchJson(`https://api.open-meteo.com/v1/forecast?latitude=${NY_COORDS.lat}&longitude=${NY_COORDS.lon}`
     + '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,wind_speed_10m'
+    + '&hourly=temperature_2m,weather_code,precipitation_probability'
     + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max'
-    + '&timezone=auto&forecast_days=7');
-  forecast.data[city] = { at: Date.now(), d };
+    + '&timezone=auto&forecast_days=7' + wxModel());
+  Object.assign(forecast, { at: Date.now(), d });
   return d;
 }
 
-async function renderWeather() {
-  const home = state.settings.clock.tz !== NY_TZ ? state.settings.clock.label : null;
-  if (!home) forecast.city = 'ny';
-  const seg = $('wx-city');
-  seg.replaceChildren(...[['ny', 'New York'], ...(home ? [['home', home]] : [])].map(([id, name]) => {
-    const l = document.createElement('label');
-    l.innerHTML = `<input type="radio" name="wx-city" value="${id}"><span></span>`;
-    l.querySelector('span').textContent = name;
-    const input = l.querySelector('input');
-    input.checked = forecast.city === id;
-    input.addEventListener('change', () => { forecast.city = id; renderWeather(); haptic(); });
-    return l;
-  }));
-  seg.hidden = !home;
-  const today = $('wx-today');
-  const week = $('wx-week');
-  let d;
-  try { d = await fetchForecast(forecast.city); } catch {
-    today.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Météo indisponible : vérifiez la connexion.' }));
-    week.replaceChildren();
-    return;
+// Hauteur du soleil (degrés) à l'instant t (ms), formules simplifiées de l'almanach (précision ~1 min).
+function sunElevation(t, lat, lon) {
+  const rad = Math.PI / 180;
+  const d = t / 86400000 - 10957.5; // jours depuis le 1er janvier 2000 à midi UTC
+  const g = (357.529 + 0.98560028 * d) * rad;
+  const q = 280.459 + 0.98564736 * d;
+  const L = (q + 1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * rad;
+  const e = (23.439 - 0.00000036 * d) * rad;
+  const ra = Math.atan2(Math.cos(e) * Math.sin(L), Math.cos(L));
+  const dec = Math.asin(Math.sin(e) * Math.sin(L));
+  const gmst = 18.697374558 + 24.06570982441908 * d;
+  const ha = (gmst * 15 + lon) * rad - ra;
+  return Math.asin(Math.sin(lat * rad) * Math.sin(dec) + Math.cos(lat * rad) * Math.cos(dec) * Math.cos(ha)) / rad;
+}
+
+// Instants où le soleil passe une hauteur donnée le jour « ymd » à New York : { up, down } (ms).
+function sunCrossings(ymd, angle) {
+  const [y, m, dd] = ymd.split('-').map(Number);
+  const noon = Date.UTC(y, m - 1, dd, 12);
+  const t0 = Date.UTC(y, m - 1, dd) - tzOffset(NY_TZ, new Date(noon)) * 60000;
+  const out = {};
+  const step = 5 * 60000;
+  let prev = sunElevation(t0, NY_COORDS.lat, NY_COORDS.lon) - angle;
+  for (let t = t0 + step; t <= t0 + 86400000; t += step) {
+    const cur = sunElevation(t, NY_COORDS.lat, NY_COORDS.lon) - angle;
+    if (prev < 0 && cur >= 0) out.up = t - step * cur / (cur - prev);
+    if (prev >= 0 && cur < 0) out.down = t - step * cur / (cur - prev);
+    prev = cur;
   }
+  return out;
+}
+
+// Lever, coucher, heures bleues (soleil entre −6° et −4°) et dorées (entre −4° et +6°).
+function sunDay(ymd) {
+  const rise = sunCrossings(ymd, -0.833);
+  const b = sunCrossings(ymd, -6);
+  const g = sunCrossings(ymd, -4);
+  const h = sunCrossings(ymd, 6);
+  return { rise: rise.up, set: rise.down, blueAm: [b.up, g.up], goldAm: [g.up, h.up], goldPm: [h.down, g.down], bluePm: [g.down, b.down] };
+}
+
+const nyTime = (t) => (t ? new Date(t).toLocaleTimeString('fr-FR', { timeZone: NY_TZ, hour: '2-digit', minute: '2-digit' }) : '—');
+const nyDate = (offset = 0) => new Date(Date.now() + offset * 86400000).toLocaleDateString('en-CA', { timeZone: NY_TZ }); // AAAA-MM-JJ
+
+const PERIODS = [['Matin', 6, 12], ['Après-midi', 12, 18], ['Soirée', 18, 24]];
+
+// Matin, après-midi, soirée d'un jour : temps le plus fréquent, températures, risque de pluie.
+function dayParts(d, ymd) {
+  const h = d.hourly;
+  return PERIODS.map(([name, from, to]) => {
+    const idx = h.time.map((t, i) => [t, i]).filter(([t]) => t.startsWith(ymd) && +t.slice(11, 13) >= from && +t.slice(11, 13) < to).map(([, i]) => i);
+    if (!idx.length) return { name };
+    const codes = idx.map((i) => h.weather_code[i]);
+    const count = (c) => codes.filter((x) => x === c).length;
+    const code = codes.reduce((a, c) => (count(c) > count(a) || (count(c) === count(a) && c > a) ? c : a));
+    const temps = idx.map((i) => h.temperature_2m[i]);
+    return { name, code, min: Math.min(...temps), max: Math.max(...temps), rain: Math.max(...idx.map((i) => h.precipitation_probability?.[i] ?? 0)), night: from >= 18 };
+  });
+}
+
+function renderDayCard(title, ymd, d) {
+  const card = document.createElement('section');
+  card.className = 'card glass wx-day';
+  const h = document.createElement('h3');
+  h.textContent = title;
+  card.append(h);
+  if (d?.hourly) {
+    const parts = document.createElement('div');
+    parts.className = 'wx-parts';
+    for (const p of dayParts(d, ymd)) {
+      const el = document.createElement('div');
+      el.className = 'wx-part';
+      el.innerHTML = '<span class="n"></span><span class="i"></span><b></b><small></small>';
+      el.querySelector('.n').textContent = p.name;
+      el.querySelector('.i').textContent = p.code == null ? '—' : weatherIcon(p.code, !p.night || p.code > 3);
+      el.querySelector('b').textContent = p.code == null ? '' : Math.round(p.min) === Math.round(p.max) ? `${Math.round(p.max)}°` : `${Math.round(p.min)}–${Math.round(p.max)}°`;
+      el.querySelector('small').textContent = p.code == null ? '' : `💧 ${p.rain} %`;
+      el.title = p.code == null ? '' : wxDesc(p.code);
+      parts.append(el);
+    }
+    card.append(parts);
+  }
+  const sun = sunDay(ymd);
+  const range = ([a, b]) => `${nyTime(a)}–${nyTime(b)}`;
+  const rows = [
+    ['🌅', 'Lever', nyTime(sun.rise)], ['🌇', 'Coucher', nyTime(sun.set)],
+    ['🔵', 'Heure bleue', `${range(sun.blueAm)} · ${range(sun.bluePm)}`],
+    ['🟠', 'Heure dorée', `${range(sun.goldAm)} · ${range(sun.goldPm)}`],
+  ];
+  const list = document.createElement('dl');
+  list.className = 'wx-sun';
+  for (const [icon, label, value] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = `${icon} ${label}`;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    list.append(dt, dd);
+  }
+  card.append(list);
+  return card;
+}
+
+async function renderWeather() {
+  const today = $('wx-today');
+  const days = $('wx-days');
+  const week = $('wx-week');
+  let d = null;
+  try { d = await fetchForecast(); } catch {
+    today.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Météo indisponible : vérifiez la connexion. Le soleil reste calculé sur le téléphone.' }));
+    week.replaceChildren();
+  }
+  const ymd0 = d?.daily.time[0] || nyDate();
+  const ymd1 = d?.daily.time[1] || nyDate(1);
+  days.replaceChildren(renderDayCard('Aujourd’hui', ymd0, d), renderDayCard('Demain', ymd1, d));
+  $('wx-note').textContent = `New York. Source : ${wxSourceLabel()} via Open-Meteo (à changer dans les Réglages), mise à jour toutes les 30 minutes. `
+    + 'Heure bleue : soleil entre 6° et 4° sous l’horizon ; heure dorée : de 4° sous l’horizon à 6° au-dessus.';
+  if (!d) return;
   const c = d.current;
   const dl = d.daily;
   const el = (cls, text) => Object.assign(document.createElement('div'), { className: cls, textContent: text });
@@ -568,12 +696,12 @@ async function renderWeather() {
     el('wx-minmax', `min ${Math.round(dl.temperature_2m_min[0])}° · max ${Math.round(dl.temperature_2m_max[0])}°`),
     facts,
   );
-  week.replaceChildren(...dl.time.slice(1).map((day, k) => {
-    const i = k + 1;
+  week.replaceChildren(...dl.time.slice(2).map((day, k) => {
+    const i = k + 2;
     const li = document.createElement('li');
     const date = new Date(`${day}T12:00:00`);
     li.innerHTML = '<span class="d"></span><span class="i"></span><span class="r"></span><span class="t"></span>';
-    li.querySelector('.d').textContent = i === 1 ? 'Demain' : date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
+    li.querySelector('.d').textContent = date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' });
     li.querySelector('.i').textContent = weatherIcon(dl.weather_code[i], true);
     li.querySelector('.r').textContent = `${wxDesc(dl.weather_code[i])} · 💧 ${dl.precipitation_probability_max[i] ?? 0} %`;
     const t = li.querySelector('.t');
@@ -583,12 +711,60 @@ async function renderWeather() {
   }));
 }
 
-// Ouvre la page Météo sur la ville touchée (depuis le bandeau)
-function openWeather(city = 'ny') {
-  forecast.city = city;
+// Ouvre la page Météo (depuis le bandeau)
+function openWeather() {
   setMast(false);
   if (currentScreen() === 'weather') { renderWeather(); return; }
   menuGo('weather');
+}
+
+// --- Plan : carte Google intégrée (sans clé), recherche et itinéraire -----------------
+
+const maps = { q: null };
+function mapsUrl(q) { return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&hl=fr&output=embed`; }
+function showMap(q) {
+  maps.q = q;
+  $('maps-frame').src = mapsUrl(q);
+}
+function myPosition() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) { reject(new Error('indisponible')); return; }
+    navigator.geolocation.getCurrentPosition((p) => resolve(`${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)}`), reject,
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
+  });
+}
+async function mapsHere(quiet = false) {
+  try { showMap(await myPosition()); } catch (e) {
+    if (!quiet) toast(e?.code === 1 ? 'Localisation refusée : autorisez-la dans les réglages du téléphone' : 'Position introuvable');
+  }
+}
+// Première ouverture : New York tout de suite, puis votre position si elle arrive.
+function renderMaps() {
+  if (maps.q) return;
+  showMap('Times Square, New York');
+  mapsHere(true);
+}
+async function openExternal(url) {
+  if (IS_NATIVE) {
+    try { const r = await window.Capacitor.nativePromise('AppLauncher', 'openUrl', { url }); if (r?.completed) return; } catch { /* navigateur */ }
+  }
+  window.open(url, '_blank');
+}
+function initMaps() {
+  const input = $('maps-q');
+  // Sans ville précisée, la recherche se fait à New York.
+  const search = () => { const q = input.value.trim(); if (q) { showMap(/new york|nyc|\bny\b|,/i.test(q) || /^-?\d+\.\d+,/.test(q) ? q : `${q}, New York`); haptic(); } };
+  $('maps-go').addEventListener('click', search);
+  input.addEventListener('change', search); // validé en fermant le clavier
+  $('maps-here').addEventListener('click', () => { input.value = ''; haptic(); mapsHere(); });
+  $('maps-route').addEventListener('click', () => {
+    haptic();
+    openExternal(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(maps.q || 'New York')}`);
+  });
+  $('maps-open').addEventListener('click', () => {
+    haptic();
+    openExternal(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(maps.q || 'New York')}`);
+  });
 }
 
 // --- Bandeau repliable ---------------------------------------------------------
@@ -609,13 +785,14 @@ function initMast() {
     if (!w) return;
     e.stopPropagation();
     haptic();
-    openWeather(w.dataset.city || 'ny');
+    openWeather();
   }, true);
   $('masthead').addEventListener('keydown', (e) => {
     const w = e.target.closest?.('.wx-link');
-    if (w && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); openWeather(w.dataset.city || 'ny'); }
+    if (w && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.stopPropagation(); openWeather(); }
   }, true);
   $('mast-toggle').addEventListener('click', toggle);
+  $('mast-pull').addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
   $('mast-toggle').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   // Tirer la barre vers le bas la déplie, vers le haut la replie
   let y0 = null;
@@ -629,19 +806,33 @@ function initMast() {
   // Repliée dès qu'on fait défiler une page ou qu'on touche ailleurs
   document.addEventListener('scroll', () => setMast(false), { capture: true, passive: true });
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#masthead')) setMast(false); });
-  // Raccourcis réseau (APK) : panneau rapide Internet d'Android et réglage d'itinérance
+  // Shazam (APK) : reconnaissance tout de suite, ou l'appli pour régler l'Auto Shazam
   if (IS_NATIVE) {
     $('mast-tools').hidden = false;
-    const open = (...actions) => async () => {
-      haptic();
-      for (const url of actions) {
-        try { const r = await window.Capacitor.nativePromise('AppLauncher', 'openUrl', { url }); if (r?.completed) return; } catch { /* suivant */ }
-      }
-      toast('Réglage indisponible sur ce téléphone');
-    };
-    $('net-panel').addEventListener('click', open('android.settings.panel.action.INTERNET_CONNECTIVITY', 'android.settings.WIRELESS_SETTINGS'));
-    $('net-roaming').addEventListener('click', open('android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
+    $('shazam-now').addEventListener('click', openFirst('Shazam n’est pas installé', 'com.shazam.android.intent.actions.START_TAGGING', 'com.shazam.android'));
+    $('shazam-auto').addEventListener('click', openFirst('Shazam n’est pas installé', 'com.shazam.android'));
   }
+}
+
+// Ouvre la première action Android (intention, paquet ou lien) que le téléphone sait lancer.
+function openFirst(fail, ...actions) {
+  return async () => {
+    haptic();
+    for (const url of actions) {
+      try { const r = await window.Capacitor.nativePromise('AppLauncher', 'openUrl', { url }); if (r?.completed) return; } catch { /* suivant */ }
+    }
+    toast(fail);
+  };
+}
+
+// Raccourcis réseau (APK), en haut de la page Applis : panneaux rapides d'Android.
+function initNetTools() {
+  if (!IS_NATIVE) return;
+  $('net-tools').hidden = false;
+  const no = 'Réglage indisponible sur ce téléphone';
+  $('net-wifi').addEventListener('click', openFirst(no, 'android.settings.panel.action.WIFI', 'android.settings.WIFI_SETTINGS'));
+  $('net-data').addEventListener('click', openFirst(no, 'android.settings.panel.action.INTERNET_CONNECTIVITY', 'android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
+  $('net-roaming').addEventListener('click', openFirst(no, 'android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
 }
 
 function startClocks() {
@@ -655,14 +846,22 @@ function startClocks() {
 
 function setClockCity(c) {
   state.settings.clock = { label: c.label, tz: c.tz, ...(Number.isFinite(c.lat) ? { lat: c.lat, lon: c.lon } : {}) };
-  weather.home = null;
-  delete forecast.data.home;
-  setTimeout(loadWeather, 0);
   store.set('settings', state.settings);
   $('set-city').value = c.label;
   $('city-suggest').replaceChildren();
   $('city-note').textContent = `Heure de ${c.label} affichée sous le titre, à côté de celle de New York.`;
   renderClocks();
+}
+
+// Toutes les villes du monde (même petites) : géocodage Open-Meteo, avec le fuseau et les coordonnées.
+async function searchCitiesOnline(text) {
+  try {
+    const d = await fetchJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(text.trim())}&count=8&language=fr`);
+    return (d.results || []).filter((r) => r.timezone).map((r) => ({
+      label: r.name, tz: r.timezone, lat: r.latitude, lon: r.longitude, key: normCity(r.name),
+      region: [r.admin2 && r.admin2 !== r.name ? r.admin2 : r.admin1, r.country_code === 'FR' ? '' : r.country].filter(Boolean).join(', '),
+    }));
+  } catch { return []; }
 }
 
 // Ville dictée : la première transcription qui correspond à une ville connue.
@@ -672,6 +871,10 @@ async function cityByVoice() {
   for (const m of matches) {
     const q = normCity(m);
     const c = cities().find((x) => x.key === q) || findCities(m, 1)[0];
+    if (c) { setClockCity(c); haptic('success'); return; }
+  }
+  if (matches[0]) {
+    const [c] = await searchCitiesOnline(matches[0]);
     if (c) { setClockCity(c); haptic('success'); return; }
   }
   haptic('warning');
@@ -730,16 +933,26 @@ function initClockSetting() {
   );
   // Champ vidé au toucher (ville actuelle en indication) pour taper directement la nouvelle.
   input.addEventListener('focus', () => { input.placeholder = state.settings.clock.label; input.value = ''; });
-  input.addEventListener('input', () => {
-    box.replaceChildren();
-    for (const c of findCities(input.value)) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'chip';
-      b.textContent = c.label;
-      b.addEventListener('click', () => { setClockCity(c); haptic(); });
-      box.append(b);
-    }
+  const chip = (c, text = c.label) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.textContent = text;
+    b.addEventListener('click', () => { setClockCity(c); haptic(); });
+    return b;
+  };
+  let seq = 0;
+  input.addEventListener('input', async () => {
+    const local = findCities(input.value);
+    box.replaceChildren(...local.map((c) => chip(c)));
+    const n = ++seq;
+    if (normCity(input.value).length < 3) return;
+    await new Promise((r) => setTimeout(r, 350)); // on attend la fin de la frappe
+    if (n !== seq) return;
+    const found = await searchCitiesOnline(input.value);
+    if (n !== seq) return;
+    const known = new Set(local.map((c) => c.key));
+    box.append(...found.filter((c) => !known.has(c.key) || c.region).slice(0, 6 - Math.min(local.length, 3)).map((c) => chip(c, c.region ? `${c.label} · ${c.region}` : c.label)));
   });
   // Validation en quittant le champ (après un éventuel toucher sur une suggestion).
   input.addEventListener('blur', () => setTimeout(() => {
@@ -747,8 +960,12 @@ function initClockSetting() {
     const q = normCity(input.value);
     if (!q) { input.value = state.settings.clock.label; return; } // rien tapé : on garde la ville
     const exact = cities().find((c) => c.key === q) || findCities(input.value, 1)[0];
-    if (exact) setClockCity(exact);
-    else $('city-note').textContent = `« ${input.value} » introuvable : essayez une grande ville du même fuseau horaire.`;
+    if (exact) { setClockCity(exact); return; }
+    const typed = input.value;
+    searchCitiesOnline(typed).then(([c]) => {
+      if (c) setClockCity(c);
+      else $('city-note').textContent = `« ${typed} » introuvable : vérifiez l’orthographe ou la connexion.`;
+    });
   }, 250));
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
 }
@@ -1708,6 +1925,7 @@ function initSettings() {
     const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
     state.settings.apps = [...apps, ...custom.filter((id) => !apps.includes(id))];
     if (/^#[0-9a-f]{6}$/i.test(s.tint || '')) state.settings.tint = s.tint;
+    if (WX_SOURCES.some((o) => o.v === s.wxModel)) state.settings.wxModel = s.wxModel;
     if (Number.isFinite(s.glow)) state.settings.glow = Math.min(200, Math.max(0, s.glow));
     if (s.frostAnim) {
       const f = s.frostAnim, num = (v, min, max, d) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : d);
@@ -1952,6 +2170,7 @@ const SCREENS = {
   calc: { label: 'Calculatrice', view: 'calc-view', icon: ICON('<rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8 7h8M8 12h.01M12 12h.01M16 12h.01M8 16h.01M12 16h.01M16 16h.01"/>') },
   cart: { label: 'Panier en cours', view: 'cart-view', icon: ICON('<path d="M6 7h12l1 13H5L6 7z"/><path d="M9 10V6a3 3 0 0 1 6 0v4"/>') },
   saved: { label: 'Mes paniers', view: 'saved-view', icon: ICON('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/>') },
+  maps: { label: 'Plan', view: 'maps-view', icon: ICON('<path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/>') },
   weather: { label: 'Météo', view: 'weather-view', icon: ICON('<path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 9.5 4.25 4.25 0 0 0 7 18z"/>') },
   settings: { label: 'Réglages', view: 'settings-view', icon: ICON('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>') },
 };
@@ -1992,6 +2211,7 @@ function menuGo(screen) {
     openView(SCREENS[screen].view);
     if (screen === 'apps') renderApps();
     if (screen === 'weather') renderWeather();
+    if (screen === 'maps') renderMaps();
   }
 }
 
@@ -2064,6 +2284,7 @@ function goScreen(screen, dir) {
     animateIn([$(view)], dir);
     if (screen === 'apps') renderApps();
     if (screen === 'weather') renderWeather();
+    if (screen === 'maps') renderMaps();
     if (screen === 'settings') checkApps([...APPS, ...state.settings.customApps.map(customApp)]).then(renderAppsChoice); // icônes du téléphone
   }
   syncCovered();
@@ -3352,6 +3573,9 @@ function init() {
   });
   trackMastHeight();
   initMast();
+  initMaps();
+  renderWxSource();
+  initNetTools();
   initCalc();
   initBackButton();
   initInfoDialog();
