@@ -59,7 +59,8 @@
   --blob-a: rgba(255, 183, 52, .85);
   --blob-b: rgba(122, 132, 153, .7);
   --blob-c: rgba(255, 140, 60, .55);
-  --glass: rgba(255, 255, 255, var(--glass-a));
+  --glass-n: rgba(255, 255, 255, var(--glass-a)); /* verre neutre du thème */
+  --glass: var(--glass-n);
   --glass-a: .64;
   --blur: 13px;
   --ts: rgba(255, 255, 255, .55);
@@ -81,7 +82,7 @@
     --blob-a: rgba(255, 183, 52, .42);
     --blob-b: rgba(122, 132, 153, .5);
     --blob-c: rgba(255, 120, 50, .3);
-    --glass: rgba(41, 44, 51, var(--glass-a));
+    --glass-n: rgba(41, 44, 51, var(--glass-a));
     --ts: rgba(0, 0, 0, .5);
     --total: var(--amber);
     --glass-edge: rgba(255, 255, 255, .14);
@@ -101,7 +102,7 @@
   --blob-a: rgba(255, 183, 52, .42);
   --blob-b: rgba(122, 132, 153, .5);
   --blob-c: rgba(255, 120, 50, .3);
-  --glass: rgba(41, 44, 51, var(--glass-a));
+  --glass-n: rgba(41, 44, 51, var(--glass-a));
   --ts: rgba(0, 0, 0, .5);
   --total: var(--amber);
   --glass-edge: rgba(255, 255, 255, .14);
@@ -1675,10 +1676,10 @@ body.has-wp .wx-week li { text-shadow: 0 1px calc(var(--glow, 1) * 3px) var(--ts
 }
 .mast-pull .mast-chevron { opacity: .85; }
 
-/* Réseau en haut de la page Applis */
-.net-tools { display: flex; gap: 8px; margin: 0 0 14px; }
-.net-tools[hidden] { display: none; }
-.net-tools .mast-tool { padding: 10px 6px; }
+/* Raccourcis du bandeau déplié : 4 boutons, icône au-dessus du libellé */
+.mast-tools { display: grid; grid-template-columns: repeat(4, 1fr); }
+.mast-tools .mast-tool { flex-direction: column; gap: 2px; padding: 6px 2px; font-size: 12.5px; letter-spacing: .02em; }
+.masthead:not(.collapsed) .mast-more { max-height: 240px; }
 
 /* Météo : matin, après-midi, soirée et soleil */
 .wx-days { display: grid; gap: 10px; margin-top: 12px; }
@@ -1695,10 +1696,34 @@ body.has-wp .wx-week li { text-shadow: 0 1px calc(var(--glow, 1) * 3px) var(--ts
 .wx-sun dd { margin: 0; text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
 body.has-wp .wx-day { text-shadow: 0 1px calc(var(--glow, 1) * 3px) var(--ts), 0 0 calc(var(--halo, 0) * var(--glow, 1) * 10px) var(--ts); }
 
-/* Plan (Google Maps) */
-.maps-body { flex: 1; display: flex; flex-direction: column; gap: 10px; min-height: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+/* Plan (Google Maps) : la carte prend toute la place disponible */
+.maps-body { flex: 1; display: flex; flex-direction: column; gap: 8px; min-height: 0; padding: 10px; margin-bottom: calc(10px + env(safe-area-inset-bottom)); }
 .maps-bar { display: flex; gap: 8px; align-items: center; }
 .maps-bar .field { flex: 1; min-width: 0; }
-.maps-frame { flex: 1; min-height: 240px; width: 100%; border: 1px solid var(--glass-edge); border-radius: 18px; padding: 0; background: var(--field); }
-.maps-actions { display: flex; gap: 10px; }
-.maps-actions .btn { padding: 12px; font-size: 18px; }
+.maps-wrap { position: relative; flex: 1; min-height: 260px; }
+.maps-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 1px solid var(--glass-edge); border-radius: 16px; background: var(--field); }
+.maps-recenter {
+  position: absolute; right: 10px; bottom: 26px; width: 48px; height: 48px; border-radius: 50%;
+  border: none; background: #fff; color: #1a73e8; box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+  display: grid; place-items: center; cursor: pointer;
+}
+.maps-recenter.busy svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.maps-status { margin: 0; font-size: 14px; font-weight: 700; opacity: .85; min-height: 1.2em; }
+.maps-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.maps-actions .mast-tool { flex-direction: column; gap: 2px; padding: 7px 2px; font-size: 12px; letter-spacing: .02em; text-align: center; line-height: 1.1; }
+
+/* Givré : trois réglages distincts */
+.frost-blocks { display: grid; gap: 10px; margin: 6px 0 10px; }
+.frost-block { padding: 10px 12px 2px; border-radius: 16px; background: var(--field); border: 1px solid var(--line); }
+.frost-block .label { margin-top: 0; }
+.frost-block .note { margin-top: 4px; }
+#tint-mix-row[hidden] { display: none; }
+.cat .cat-ico { flex: none; color: var(--total); }
+.cat[aria-checked="true"] .cat-ico { color: var(--anthracite); }
+.apps-panel { padding: 12px; }
+.rate-date { margin: 0 0 8px; font-weight: 800; font-size: 16px; color: var(--total); }
+/* Givré aussi sur les éléments posés directement sur la photo (panier, Mes paniers) */
+.glass-strip { border: 1px solid var(--glass-edge); border-radius: 18px; padding: 10px 12px; }
+.empty.glass-strip { margin: 24px 0; padding: 22px 16px; color: var(--text); }
+.saved-note.glass-strip { margin-bottom: calc(10px + env(safe-area-inset-bottom)); padding-bottom: 10px; }

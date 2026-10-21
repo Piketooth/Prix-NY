@@ -49,8 +49,10 @@
       <span id="clock-home"></span>
     </p>
     <div id="mast-tools" class="mast-tools" hidden>
+      <button id="net-wifi" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg><span>Wi-Fi</span></button>
+      <button id="net-data" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20V8M4 12l4-4 4 4M16 4v12M12 12l4 4 4-4"/></svg><span>Données</span></button>
+      <button id="net-roaming" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Itinérance</span></button>
       <button id="shazam-now" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg><span>Shazam</span></button>
-      <button id="shazam-auto" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9"/><path d="M21 3v6h-6"/><path d="M10 9v6l5-3z"/></svg><span>Auto Shazam</span></button>
     </div>
     </div>
     <div class="mast-rule double"></div>
@@ -155,7 +157,7 @@
       <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
       <h2>Panier en cours</h2>
     </div>
-    <div class="cart-name-row">
+    <div class="cart-name-row glass-strip glass">
       <button id="cart-title" class="title-btn cart-name-btn" type="button" aria-label="Renommer le panier">Sans nom</button>
       <button id="cart-clear" class="btn secondary small" type="button">Réinitialiser</button>
       <button id="cart-share" class="round-btn small" type="button" aria-label="Partager le panier" title="Partager"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4"/></svg></button>
@@ -163,7 +165,7 @@
     </div>
     <div id="cat-summary" class="cat-summary"></div>
     <ol id="cart-list" class="cart-list"></ol>
-    <p id="cart-empty" class="empty">Votre panier est vide.<br>Ajoutez un article depuis l'écran principal.</p>
+    <p id="cart-empty" class="empty glass-strip glass">Votre panier est vide.<br>Ajoutez un article depuis l'écran principal.</p>
     <div class="sheet-foot">
       <div class="foot-total">
         <span class="hero-label">Total panier</span>
@@ -207,13 +209,13 @@
       <h2 id="saved-title">Mes paniers</h2>
     </div>
     <ul id="saved-list" class="saved-list"></ul>
-    <p id="saved-empty" class="empty">Aucun panier enregistré.<br>Depuis le panier, appuyez sur « Enregistrer ».</p>
+    <p id="saved-empty" class="empty glass-strip glass">Aucun panier enregistré.<br>Depuis le panier, appuyez sur « Enregistrer ».</p>
     <div class="saved-actions">
       <button id="export-btn" class="btn secondary" type="button">📤 Exporter</button>
       <button id="import-btn" class="btn secondary" type="button">📥 Importer</button>
       <input id="import-file" type="file" accept=".json,application/json,text/plain" hidden>
     </div>
-    <p class="note saved-note">Sauvegardez vos paniers avant de changer de téléphone ou de désinstaller l'appli.</p>
+    <p class="note saved-note glass-strip glass">Sauvegardez vos paniers avant de changer de téléphone ou de désinstaller l'appli.</p>
   </section>
 
   <section id="apps-view" class="sheet" hidden aria-labelledby="apps-title">
@@ -222,13 +224,10 @@
       <h2 id="apps-title">Applis utiles</h2>
     </div>
     <div class="apps-scroll">
-      <div id="net-tools" class="net-tools" hidden>
-        <button id="net-wifi" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg><span>Wi-Fi</span></button>
-        <button id="net-data" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 20V8M4 12l4-4 4 4M16 4v12M12 12l4 4 4-4"/></svg><span>Données</span></button>
-        <button id="net-roaming" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span>Itinérance</span></button>
-      </div>
+      <div class="card glass apps-panel">
       <div id="apps-grid" class="apps-grid"></div>
       <p id="apps-note" class="note apps-note"></p>
+      </div>
     </div>
   </section>
 
@@ -251,16 +250,21 @@
       <button class="round-btn" type="button" data-back aria-label="Retour"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
       <h2 id="maps-title">Plan</h2>
     </div>
-    <div class="maps-body">
+    <div class="maps-body card glass">
       <div class="maps-bar">
         <input id="maps-q" class="field" type="text" inputmode="none" data-kbd maxlength="80" placeholder="Adresse, lieu, magasin…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher sur la carte">
         <button id="maps-go" class="round-btn small" type="button" aria-label="Rechercher"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
-        <button id="maps-here" class="round-btn small" type="button" aria-label="Ma position"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="7"/></svg></button>
       </div>
-      <iframe id="maps-frame" class="maps-frame card" title="Carte Google Maps" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+      <div class="maps-wrap">
+        <iframe id="maps-frame" class="maps-frame" title="Carte Google Maps" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+        <button id="maps-here" class="maps-recenter" type="button" aria-label="Recentrer sur ma position"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+      </div>
+      <p id="maps-status" class="maps-status" aria-live="polite"></p>
       <div class="maps-actions">
-        <button id="maps-route" class="btn" type="button">Itinéraire</button>
-        <button id="maps-open" class="btn secondary" type="button">Ouvrir Google Maps</button>
+        <button id="maps-route" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c3-1 4-4 7-6s5-3 7-8"/><circle cx="5" cy="19" r="2"/><path d="M15 5h4v4"/></svg><span>Itinéraire</span></button>
+        <button id="maps-live" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="2.5"/><path d="M7.5 14.5a6.5 6.5 0 1 1 9 0M4.6 17.4a10.5 10.5 0 1 1 14.8 0"/></svg><span>Partager en direct</span></button>
+        <button id="maps-marker" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.6-6-10.5a6 6 0 0 1 12 0C18 15.4 12 21 12 21z"/><path d="M12 8v5M9.5 10.5h5"/></svg><span>Map Marker</span></button>
+        <button id="maps-open" class="mast-tool" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg><span>Google Maps</span></button>
       </div>
     </div>
   </section>
@@ -287,6 +291,7 @@
       <h3 class="settings-group">Argent</h3>
       <div class="card glass setting">
         <label for="set-rate" class="label">Taux de change</label>
+        <p id="rate-date" class="rate-date"></p>
         <div class="setting-row">
           <span class="unit">1 $ =</span>
           <input id="set-rate" class="field" type="text" inputmode="decimal" autocomplete="off">
@@ -381,20 +386,38 @@
           <span class="check-text">Couleurs adaptées à la photo</span>
         </label>
         <p class="note">Texte et cartes en clair ou en sombre selon la photo, pour rester lisibles. Sinon, l'appli suit le mode clair ou sombre du téléphone.</p>
-        <div id="frost-fixed">
-          <label for="set-frost" class="label">Flou du givré</label>
-          <div class="range-row">
-            <span class="muted">0 %</span>
-            <input id="set-frost" class="range" type="range" min="0" max="100" step="5">
-            <b id="set-frost-v" class="range-val"></b>
+        <div id="frost-fixed" class="frost-blocks">
+          <div class="frost-block">
+            <label for="set-frost" class="label">Flou</label>
+            <div class="range-row">
+              <span class="muted">0 %</span>
+              <input id="set-frost" class="range" type="range" min="0" max="100" step="5">
+              <b id="set-frost-v" class="range-val"></b>
+            </div>
+            <p class="note">La photo derrière les cartes : nette à 0 %, très floue à 100 %.</p>
           </div>
-          <label for="set-opacity" class="label">Opacité des cartes</label>
-          <div class="range-row">
-            <span class="muted">0 %</span>
-            <input id="set-opacity" class="range" type="range" min="0" max="100" step="5">
-            <b id="set-opacity-v" class="range-val"></b>
+          <div class="frost-block">
+            <label for="set-opacity" class="label">Opacité</label>
+            <div class="range-row">
+              <span class="muted">0 %</span>
+              <input id="set-opacity" class="range" type="range" min="0" max="100" step="5">
+              <b id="set-opacity-v" class="range-val"></b>
+            </div>
+            <p class="note">Le fond des cartes : transparent à 0 %, plein à 100 %. Plus il est opaque, mieux le texte se lit.</p>
           </div>
-          <p class="note">Flou : 0 % la photo reste nette derrière les cartes, 100 % elle devient floue. Opacité : 0 % cartes transparentes, 100 % cartes pleines ; plus elle est haute, mieux le texte se lit.</p>
+          <div class="frost-block">
+            <span class="label">Teinte</span>
+            <div class="chips tint-row" role="radiogroup" aria-label="Teinte du givré">
+              <button id="tint-neutral" class="chip" type="button" role="radio">Neutre</button>
+              <label id="tint-custom" class="chip tint-pick" role="radio"><span id="tint-swatch" class="tint-swatch" aria-hidden="true"></span>Couleur…<input id="tint-color" type="color" value="#ffb734" aria-label="Choisir la teinte du givré"></label>
+            </div>
+            <div id="tint-mix-row" class="range-row">
+              <span class="muted">0 %</span>
+              <input id="set-tint-mix" class="range" type="range" min="0" max="100" step="5" aria-label="Force de la teinte">
+              <b id="set-tint-mix-v" class="range-val"></b>
+            </div>
+            <p id="tint-note" class="note"></p>
+          </div>
         </div>
         <label class="check">
           <input id="opt-frost-anim" type="checkbox">
@@ -408,12 +431,6 @@
           <label class="anim-row"><span>Répéter toutes les</span><input id="fa-every" class="range" type="range" min="5" max="120" step="5"><b id="fa-every-v"></b></label>
           <p id="fa-note" class="note"></p>
         </div>
-        <span class="label">Teinte du givré</span>
-        <div class="chips tint-row" role="radiogroup" aria-label="Teinte du givré">
-          <button id="tint-neutral" class="chip" type="button" role="radio">Neutre</button>
-          <label id="tint-custom" class="chip tint-pick" role="radio"><span id="tint-swatch" class="tint-swatch" aria-hidden="true"></span>Couleur…<input id="tint-color" type="color" value="#ffb734" aria-label="Choisir la teinte du givré"></label>
-        </div>
-        <p class="note">Neutre : verre blanc ou anthracite selon le thème. Couleur : n’importe quelle teinte du nuancier, l’intensité reste celle du givré.</p>
         <label for="set-glow" class="label">Ombres et lueurs</label>
         <div class="range-row">
           <span class="muted">0 %</span>

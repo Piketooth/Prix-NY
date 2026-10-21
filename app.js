@@ -47,6 +47,27 @@ const CATEGORIES = [
 ];
 // Resto et Transport : pourboire possible et partage entre plusieurs personnes (une seule addition).
 const isShared = (id) => id === 'food' || id === 'transport';
+// Icônes dessinées aux couleurs de la charte (ambre en sombre, anthracite en clair)
+const CAT_ICONS = {
+  shop: '<path d="M6 8h12l-1 12H7L6 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/>',
+  clothes: '<path d="M9 4L4 6.5l1.8 3.6L8 9.3V20h8V9.3l2.2.8L20 6.5 15 4a3 3 0 0 1-6 0z"/>',
+  food: '<path d="M7 3v18M4.5 3v5a2.5 2.5 0 0 0 5 0V3"/><path d="M17.5 21V3c-2.2 1.2-3.5 3.6-3.5 7v3h3.5"/>',
+  grocery: '<path d="M3 4h2.2l2.3 11h10.2L20 7.5H6.3"/><circle cx="9" cy="19" r="1.4"/><circle cx="16.5" cy="19" r="1.4"/>',
+  transport: '<path d="M4 16.5V13l1.7-4.3A2 2 0 0 1 7.6 7.5h8.8a2 2 0 0 1 1.9 1.2L20 13v3.5z"/><path d="M10 7.5V5h4v2.5M4 13h16"/><circle cx="7.5" cy="16.5" r="1.6"/><circle cx="16.5" cy="16.5" r="1.6"/>',
+  hotel: '<path d="M3 19V6M3 15h18v4M21 15v-3a3 3 0 0 0-3-3h-7v6"/><circle cx="7" cy="11.5" r="2"/>',
+  other: '<path d="M12 3.5l1.9 5.1 5.1 1.9-5.1 1.9L12 17.5l-1.9-5.1L5 10.5l5.1-1.9z"/><path d="M18.5 16v4M16.5 18h4"/>',
+};
+const catIcon = (id) => `<svg class="cat-ico" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${CAT_ICONS[id] || CAT_ICONS.other}</svg>`;
+// Bouton de catégorie : icône de la charte et libellé
+function catButton(c) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'cat';
+  b.style.setProperty('--cat', c.color);
+  b.innerHTML = `${catIcon(c.id)}<span></span>`;
+  b.querySelector('span').textContent = c.label;
+  return b;
+}
 const catOf = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES.at(-1);
 const FEE_PRESETS = [0, 1, 2, 3];
 
@@ -64,15 +85,17 @@ const state = {
   // clock : deuxième horloge du bandeau (ville et fuseau horaire)
   settings: { fee: 0, rate: null, sound: true, voiceLang: 'fr-FR', wallpaper: 'random', wpInterval: 'launch', adaptive: true, frost: 75, opacity: 64, clock: { label: 'Paris', tz: 'Europe/Paris' }, frostScale: 3,
     // screens : ordre du balayage entre écrans ; apps : applis affichées dans « Applis utiles »
-    screens: ['main', 'apps', 'calc', 'cart', 'saved', 'weather', 'maps', 'settings'],
+    screens: ['main', 'apps', 'maps', 'calc', 'cart', 'saved', 'weather', 'settings'],
+    v: 2, // version des réglages (migrations ponctuelles)
     // apps : applis affichées, dans l'ordre choisi ; « c:paquet » pour celles ajoutées depuis le téléphone
-    apps: ['maps', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
+    apps: ['maps', 'mapmarker', 'citymapper', 'mta', 'uber', 'lyft', 'curb', 'citibike', 'translate', 'wallet', 'yelp', 'todaytix'],
     customApps: [], // applis ajoutées depuis le téléphone : [{ pkg, name }]
     hideMissing: false, // masquer les applis non installées (APK)
     // frostAnim : givré animé, toutes les « every » s, de « from » à « to » en « dur » s, puis retour ;
     // niveaux en % des réglages Flou et Opacité (100 % = réglages, 0 % = cartes transparentes)
     frostAnim: { on: false, every: 20, from: 100, to: 0, dur: 2 },
     tint: null, // teinte du givré (#rrggbb) ; null = neutre
+    tintMix: 60, // force de la teinte : part de la couleur dans le verre (100 % = couleur pure)
     glow: 100, // ombres et lueurs : 100 % = dosage automatique
     wxModel: 'best_match' }, // source météo : modèle de prévision Open-Meteo
 };
@@ -240,13 +263,9 @@ function renderCategories() {
   const box = $('categories');
   box.replaceChildren();
   for (const c of CATEGORIES) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'cat';
-    b.style.setProperty('--cat', c.color);
+    const b = catButton(c);
     b.setAttribute('role', 'radio');
     b.setAttribute('aria-checked', String(c.id === state.category));
-    b.textContent = `${c.emoji} ${c.label}`;
     b.addEventListener('click', () => setCategory(c.id));
     box.append(b);
   }
@@ -335,7 +354,7 @@ const PAGE_INFO = {
     ['Heure et météo', 'source des prévisions (NOAA, ECMWF, Météo-France…) ; ville dont l’heure s’affiche sous le titre, à côté de celle de New York. Le bouton position envoie votre position approximative au service BigDataCloud pour trouver le nom de la ville, et seulement à ce moment-là. Une ville absente de la liste intégrée est cherchée chez Open-Meteo.'],
     ['Saisie', 'langue de la dictée des prix et des villes, son au démarrage.'],
     ['Navigation', 'ordre des écrans quand on fait glisser le doigt ; applis affichées dans la page Applis utiles, leur ordre, vos propres applis, et masquer celles qui ne sont pas installées.'],
-    ['Apparence', 'fond d’écran (photos de New York ou les vôtres), couleurs adaptées à la photo, givré fixe ou animé (flou, opacité, teinte), ombres et lueurs.'],
+    ['Apparence', 'fond d’écran (photos de New York ou les vôtres), couleurs adaptées à la photo ; givré en trois réglages distincts : flou de la photo, opacité des cartes, teinte et sa force ; givré animé ; ombres et lueurs.'],
   ]],
 };
 
@@ -718,48 +737,88 @@ function openWeather() {
   menuGo('weather');
 }
 
-// --- Plan : carte Google intégrée (sans clé), recherche et itinéraire -----------------
+// --- Plan : carte Google intégrée (sans clé), votre position, recherche, itinéraire, partage -----
 
-const maps = { q: null };
-function mapsUrl(q) { return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=15&hl=fr&output=embed`; }
-function showMap(q) {
+const maps = { q: null, pos: null };
+function mapsUrl(q, zoom = 15) { return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=${zoom}&hl=fr&output=embed`; }
+function showMap(q, zoom) {
   maps.q = q;
-  $('maps-frame').src = mapsUrl(q);
+  $('maps-frame').src = mapsUrl(q, zoom);
 }
-function myPosition() {
-  return new Promise((resolve, reject) => {
-    if (!navigator.geolocation) { reject(new Error('indisponible')); return; }
-    navigator.geolocation.getCurrentPosition((p) => resolve(`${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)}`), reject,
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 });
-  });
-}
-async function mapsHere(quiet = false) {
-  try { showMap(await myPosition()); } catch (e) {
-    if (!quiet) toast(e?.code === 1 ? 'Localisation refusée : autorisez-la dans les réglages du téléphone' : 'Position introuvable');
+const geo = (opts) => new Promise((resolve, reject) => {
+  if (!navigator.geolocation) { reject(new Error('indisponible')); return; }
+  navigator.geolocation.getCurrentPosition(resolve, reject, opts);
+});
+// GPS précis d'abord, puis la position approximative (réseau) si le GPS ne répond pas.
+async function myPosition() {
+  try { return await geo({ enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }); } catch (e) {
+    if (e?.code === 1) throw e; // refusée : inutile d'insister
+    return geo({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
   }
 }
-// Première ouverture : New York tout de suite, puis votre position si elle arrive.
+async function mapsHere() {
+  const btn = $('maps-here');
+  btn.classList.add('busy');
+  $('maps-status').textContent = 'Recherche de votre position…';
+  try {
+    const p = await myPosition();
+    maps.pos = `${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)}`;
+    showMap(maps.pos, 17);
+    $('maps-status').textContent = `📍 Vous êtes ici (précision ± ${Math.round(p.coords.accuracy)} m)`;
+  } catch (e) {
+    $('maps-status').textContent = e?.code === 1
+      ? 'Localisation refusée : autorisez-la pour New York dans les réglages du téléphone (Applis › New York › Autorisations).'
+      : 'Position introuvable : activez la localisation du téléphone, puis touchez ◎.';
+  } finally {
+    btn.classList.remove('busy');
+  }
+}
+// Première ouverture : New York tout de suite, puis votre position dès qu'elle arrive.
 function renderMaps() {
   if (maps.q) return;
   showMap('Times Square, New York');
-  mapsHere(true);
+  mapsHere();
 }
 async function openExternal(url) {
   if (IS_NATIVE) {
-    try { const r = await window.Capacitor.nativePromise('AppLauncher', 'openUrl', { url }); if (r?.completed) return; } catch { /* navigateur */ }
+    try { const r = await window.Capacitor.nativePromise('AppLauncher', 'openUrl', { url }); if (r?.completed) return true; } catch { /* navigateur */ }
+    return false;
   }
   window.open(url, '_blank');
+  return true;
 }
 function initMaps() {
   const input = $('maps-q');
   // Sans ville précisée, la recherche se fait à New York.
-  const search = () => { const q = input.value.trim(); if (q) { showMap(/new york|nyc|\bny\b|,/i.test(q) || /^-?\d+\.\d+,/.test(q) ? q : `${q}, New York`); haptic(); } };
+  const search = () => {
+    const q = input.value.trim();
+    if (!q) return;
+    showMap(/new york|nyc|\bny\b|,/i.test(q) || /^-?\d+\.\d+,/.test(q) ? q : `${q}, New York`);
+    $('maps-status').textContent = `Résultat pour « ${q} »`;
+    haptic();
+  };
   $('maps-go').addEventListener('click', search);
   input.addEventListener('change', search); // validé en fermant le clavier
   $('maps-here').addEventListener('click', () => { input.value = ''; haptic(); mapsHere(); });
   $('maps-route').addEventListener('click', () => {
     haptic();
-    openExternal(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(maps.q || 'New York')}`);
+    const dest = maps.q && maps.q !== maps.pos ? maps.q : null;
+    openExternal(dest ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}` : 'https://www.google.com/maps/dir/?api=1');
+  });
+  // Partage en direct : géré par Google Maps (suivi continu, durée au choix, arrêt à tout moment).
+  $('maps-live').addEventListener('click', async () => {
+    haptic();
+    if (await openExternal(IS_NATIVE ? 'com.google.android.apps.maps' : 'https://www.google.com/maps')) {
+      showInfo('Partager ma position en direct', [
+        'Dans Google Maps : touchez votre photo de profil (en haut à droite), puis « Partage de position ».',
+        'Choisissez la durée (1 heure, jusqu’à ce que vous l’arrêtiez…) et la personne, ou « Plus d’options » pour envoyer un lien par WhatsApp ou SMS.',
+        'Vos proches voient votre position se déplacer en temps réel ; vous arrêtez le partage au même endroit.',
+      ]);
+    } else toast('Google Maps n’est pas installé');
+  });
+  $('maps-marker').addEventListener('click', async () => {
+    haptic();
+    if (!(await openExternal('com.exlyo.mapmarker'))) openExternal('https://play.google.com/store/apps/details?id=com.exlyo.mapmarker');
   });
   $('maps-open').addEventListener('click', () => {
     haptic();
@@ -806,11 +865,14 @@ function initMast() {
   // Repliée dès qu'on fait défiler une page ou qu'on touche ailleurs
   document.addEventListener('scroll', () => setMast(false), { capture: true, passive: true });
   document.addEventListener('pointerdown', (e) => { if (!e.target.closest('#masthead')) setMast(false); });
-  // Shazam (APK) : reconnaissance tout de suite, ou l'appli pour régler l'Auto Shazam
+  // Raccourcis Android : Wi-Fi, données, itinérance (panneaux d'Android) et Shazam
   if (IS_NATIVE) {
     $('mast-tools').hidden = false;
+    const no = 'Réglage indisponible sur ce téléphone';
+    $('net-wifi').addEventListener('click', openFirst(no, 'android.settings.panel.action.WIFI', 'android.settings.WIFI_SETTINGS'));
+    $('net-data').addEventListener('click', openFirst(no, 'android.settings.panel.action.INTERNET_CONNECTIVITY', 'android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
+    $('net-roaming').addEventListener('click', openFirst(no, 'android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
     $('shazam-now').addEventListener('click', openFirst('Shazam n’est pas installé', 'com.shazam.android.intent.actions.START_TAGGING', 'com.shazam.android'));
-    $('shazam-auto').addEventListener('click', openFirst('Shazam n’est pas installé', 'com.shazam.android'));
   }
 }
 
@@ -823,16 +885,6 @@ function openFirst(fail, ...actions) {
     }
     toast(fail);
   };
-}
-
-// Raccourcis réseau (APK), en haut de la page Applis : panneaux rapides d'Android.
-function initNetTools() {
-  if (!IS_NATIVE) return;
-  $('net-tools').hidden = false;
-  const no = 'Réglage indisponible sur ce téléphone';
-  $('net-wifi').addEventListener('click', openFirst(no, 'android.settings.panel.action.WIFI', 'android.settings.WIFI_SETTINGS'));
-  $('net-data').addEventListener('click', openFirst(no, 'android.settings.panel.action.INTERNET_CONNECTIVITY', 'android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
-  $('net-roaming').addEventListener('click', openFirst(no, 'android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS'));
 }
 
 function startClocks() {
@@ -1093,12 +1145,13 @@ async function refreshRate() {
 function renderRateChecked() {
   const fx = state.fx;
   const el = $('rate-checked');
-  if (!fx) { el.textContent = 'Aucun cours enregistré.'; return; }
+  if (!fx) { el.textContent = 'Aucun cours enregistré.'; $('rate-date').textContent = 'Cours pas encore chargé : connectez-vous à Internet.'; return; }
   const day = new Date(fx.date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
   const checked = fx.checkedAt ? new Date(fx.checkedAt) : null;
   const when = checked
     ? ` Vérifié ${checked.toDateString() === new Date().toDateString() ? 'aujourd’hui' : `le ${checked.toLocaleDateString('fr-FR')}`} à ${checked.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}.`
     : '';
+  $('rate-date').textContent = `Cours BCE du ${day} : 1 $ = ${fx.rate.toLocaleString('fr-FR', { maximumFractionDigits: 4 })} €`;
   el.textContent = `Cours du ${day} (${fx.source}).${when} La BCE publie un cours les jours ouvrés vers 16 h (heure de Paris) : le week-end, c’est celui du vendredi.`;
 }
 
@@ -1460,12 +1513,8 @@ function chooseCategory(it, kind) {
   const box = $('cat-choices');
   box.replaceChildren();
   for (const c of CATEGORIES) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'cat';
-    b.style.setProperty('--cat', c.color);
+    const b = catButton(c);
     b.setAttribute('aria-checked', String(c.id === it.category));
-    b.textContent = `${c.emoji} ${c.label}`;
     b.addEventListener('click', () => {
       dlg.close();
       if (c.id === it.category) return;
@@ -1917,14 +1966,19 @@ function initSettings() {
       // Écrans ajoutés depuis (Calculatrice) : insérés avant les Réglages.
       const known = s.screens.filter((id) => SCREEN_IDS.includes(id));
       for (const id of SCREEN_IDS) if (!known.includes(id)) known.splice(Math.max(0, known.indexOf('settings')), 0, id);
+      // v2 : le Plan juste après les Applis
+      if (!(s.v >= 2) && known.includes('maps')) { known.splice(known.indexOf('maps'), 1); known.splice(known.indexOf('apps') + 1, 0, 'maps'); }
       if (known.length === SCREEN_IDS.length) state.settings.screens = known;
     }
     if (Array.isArray(s.customApps)) state.settings.customApps = s.customApps.filter((a) => a?.pkg && a?.name);
     if (s.hideMissing) state.settings.hideMissing = true;
     const custom = state.settings.customApps.map((c) => `c:${c.pkg}`);
     const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
+    if (!(s.v >= 2) && !apps.includes('mapmarker')) apps.splice(apps.includes('maps') ? apps.indexOf('maps') + 1 : 0, 0, 'mapmarker'); // v2 : Map Marker
     state.settings.apps = [...apps, ...custom.filter((id) => !apps.includes(id))];
     if (/^#[0-9a-f]{6}$/i.test(s.tint || '')) state.settings.tint = s.tint;
+    // Avant le réglage de force, la teinte remplaçait entièrement le verre.
+    state.settings.tintMix = Number.isFinite(s.tintMix) ? clamp(s.tintMix) : s.tint ? 100 : 60;
     if (WX_SOURCES.some((o) => o.v === s.wxModel)) state.settings.wxModel = s.wxModel;
     if (Number.isFinite(s.glow)) state.settings.glow = Math.min(200, Math.max(0, s.glow));
     if (s.frostAnim) {
@@ -2451,6 +2505,7 @@ function initCalc() {
 
 const APPS = [
   { id: 'maps', pkg: 'com.google.android.apps.maps', name: 'Google Maps', desc: 'Plans, itinéraires', emoji: '🗺️', color: '#7fc8a9', use: 'Plans, itinéraires à pied, en métro ou en voiture, horaires des magasins et des musées. Fonctionne aussi hors connexion si vous téléchargez la carte de New York avant de partir.' },
+  { id: 'mapmarker', pkg: 'com.exlyo.mapmarker', name: 'Map Marker', desc: 'Vos lieux sur la carte', emoji: '📍', color: '#f07b6a', use: 'Votre carnet d’adresses sur la carte : hôtel, restos, boutiques et visites repérés à l’avance, avec couleurs, icônes, notes et photos, rangés en dossiers. Fonctionne hors connexion.' },
   { id: 'citymapper', pkg: 'com.citymapper.app.release', name: 'Citymapper', desc: 'Métro, bus, à pied', emoji: '🧭', color: '#9be15d', use: 'Le meilleur trajet en transports en commun : métro, bus, ferry, à pied ou à vélo. Indique quelle voiture prendre et quelle sortie de métro emprunter, et signale les perturbations en temps réel.' },
   { id: 'mta', pkg: 'info.mta.mymta', name: 'MTA', desc: 'Métro et bus en direct', emoji: '🚇', color: '#5b9cf0', use: 'L’appli officielle du métro et des bus de New York : passages en temps réel, travaux et fermetures de stations, plans des lignes.' },
   { id: 'uber', pkg: 'com.ubercab', name: 'Uber', desc: 'VTC', emoji: '🚗', color: '#c9ced6', use: 'VTC (voiture avec chauffeur) : le prix est annoncé avant de commander, taxes et suppléments compris, et le paiement se fait dans l’appli. Pourboire facultatif, donné dans l’appli après la course.' },
@@ -3059,13 +3114,21 @@ function renderFrostAnim() {
 function applyTint() {
   const root = document.documentElement.style;
   const t = state.settings.tint;
+  const mix = state.settings.tintMix;
   if (t) {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(t.slice(i, i + 2), 16));
-    root.setProperty('--glass', `rgba(${r}, ${g}, ${b}, var(--glass-a))`);
+    // Teinte mêlée au verre neutre du thème, selon sa force ; l'opacité reste celle du réglage Opacité.
+    root.setProperty('--glass', `color-mix(in srgb, rgba(${r}, ${g}, ${b}, var(--glass-a)) ${mix}%, var(--glass-n))`);
     root.setProperty('--tint', t);
   } else {
     root.removeProperty('--glass');
   }
+  $('tint-mix-row').hidden = !t;
+  $('set-tint-mix').value = mix;
+  $('set-tint-mix-v').textContent = `${mix} %`;
+  $('tint-note').textContent = t
+    ? `Couleur du verre, choisie au nuancier. Force : ${mix} % de couleur, le reste en verre neutre. Le flou et l’opacité ne changent pas.`
+    : 'Verre blanc ou anthracite selon le thème. Choisissez « Couleur… » pour le teinter.';
   $('tint-neutral').setAttribute('aria-checked', String(!t));
   $('tint-custom').setAttribute('aria-checked', String(!!t));
   $('tint-neutral').classList.toggle('on', !t);
@@ -3083,6 +3146,8 @@ function initTintGlow() {
   $('tint-neutral').addEventListener('click', () => { state.settings.tint = null; store.set('settings', state.settings); applyTint(); haptic(); });
   $('tint-color').addEventListener('input', () => { state.settings.tint = $('tint-color').value; applyTint(); });
   $('tint-color').addEventListener('change', () => { state.settings.tint = $('tint-color').value; store.set('settings', state.settings); applyTint(); haptic(); });
+  $('set-tint-mix').addEventListener('input', () => { state.settings.tintMix = Number($('set-tint-mix').value); applyTint(); });
+  $('set-tint-mix').addEventListener('change', () => { store.set('settings', state.settings); haptic(); });
   $('set-glow').value = state.settings.glow;
   applyGlow();
   $('set-glow').addEventListener('input', () => { state.settings.glow = Number($('set-glow').value); applyGlow(); });
@@ -3575,7 +3640,6 @@ function init() {
   initMast();
   initMaps();
   renderWxSource();
-  initNetTools();
   initCalc();
   initBackButton();
   initInfoDialog();
