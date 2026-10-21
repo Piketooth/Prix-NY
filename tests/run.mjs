@@ -33,6 +33,7 @@ const RUNS = [
   ['ecrans.mjs', 'light'], ['ecrans.mjs', 'dark'],
   ['lot.mjs', 'light'], ['lot.mjs', 'dark'],
   ['notes.mjs', 'light'], ['notes.mjs', 'dark'],
+  ['accueil.mjs', 'light'], ['accueil.mjs', 'dark'],
   ['sauvegarde.mjs'], ['ocr.mjs'],
 ];
 let failed = 0;
