@@ -33,7 +33,7 @@
       <img class="brand-mark" src="icons/mark-128.png" alt="" width="44" height="44">
       <div id="mast-toggle" class="mast-toggle" role="button" tabindex="0" aria-expanded="false" aria-controls="mast-more" aria-label="Afficher ou masquer le détail du bandeau">
         <h1 class="mast-title">New York</h1>
-        <span class="mast-mini"><span class="mini-line"><span id="mini-time"></span><span id="mini-weather" class="wx-link" role="button" tabindex="0" aria-label="Météo" hidden></span></span><span id="mini-rate"></span></span>
+        <span class="mast-mini"><span class="mini-line"><span id="eco-badge" class="eco-badge" title="Économie de batterie active" hidden>🔋</span><span id="mini-time"></span><span id="mini-weather" class="wx-link" role="button" tabindex="0" aria-label="Météo" hidden></span></span><span id="mini-rate"></span></span>
       </div>
       <button id="menu-open" class="round-btn small" type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div id="main-menu" class="main-menu" role="menu" hidden></div>
@@ -68,6 +68,8 @@
   </div>
 
   <main>
+    <div id="home-blocks" class="home-blocks">
+    <div class="home-block" data-block="price">
     <section class="card glass input-card">
       <label for="price" class="label">Prix affiché</label>
       <div class="price-row">
@@ -125,7 +127,23 @@
         </div>
       </div>
     </section>
+    </div>
+    </div>
+    <section id="home-add" class="home-add" hidden>
+      <span class="label">Ajouter un bloc</span>
+      <div id="home-add-list" class="chips"></div>
+      <p class="note">Glisser ≡ pour déplacer, « Compact / Complet » pour la taille, × pour retirer.</p>
+    </section>
+    <section id="home-empty" class="card glass home-empty" hidden>
+      <p>Votre accueil est vide.</p>
+      <button id="home-empty-add" class="btn small" type="button">＋ Ajouter des blocs</button>
+    </section>
+    <button id="home-edit-btn" class="home-edit-btn" type="button">✎ Modifier l’accueil</button>
   </main>
+  <div id="home-edit-bar" class="home-edit-bar" hidden>
+    <span>Modification de l’accueil</span>
+    <button id="home-done" class="btn small" type="button">Terminé</button>
+  </div>
 
   <!-- Saisie du prix : seuls les montants restent affichés au-dessus du pavé -->
   <div id="price-focus" class="price-focus" aria-live="polite" aria-hidden="true">
@@ -252,9 +270,10 @@
     </div>
     <div class="maps-body card glass">
       <div class="maps-bar">
-        <input id="maps-q" class="field" type="text" inputmode="none" data-kbd maxlength="80" placeholder="Adresse, lieu, magasin…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher sur la carte">
+        <input id="maps-q" class="field" type="text" inputmode="none" data-kbd="plain" maxlength="80" placeholder="Adresse, lieu, magasin…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher sur la carte">
         <button id="maps-go" class="round-btn small" type="button" aria-label="Rechercher"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
       </div>
+      <ul id="maps-suggest" class="maps-suggest" role="listbox" aria-label="Suggestions" hidden></ul>
       <div class="maps-wrap">
         <iframe id="maps-frame" class="maps-frame" title="Carte Google Maps" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
         <button id="maps-here" class="maps-recenter" type="button" aria-label="Recentrer sur ma position"><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
@@ -352,6 +371,16 @@
           <span class="check-text">Son au démarrage</span>
         </label>
       </div>
+      <h3 class="settings-group">Accueil</h3>
+      <div class="card glass setting">
+        <span class="label">Profil</span>
+        <div id="home-profile" class="chips" role="radiogroup" aria-label="Profil de l’accueil"></div>
+        <p id="home-profile-note" class="note"></p>
+        <span class="label">Blocs de l’accueil</span>
+        <ol id="home-list" class="screen-order home-list"></ol>
+        <button id="home-edit-open" class="btn secondary small" type="button">✎ Modifier directement sur l’accueil</button>
+        <p class="note">Cochez les blocs à afficher, choisissez leur taille et leur ordre. Sur l’accueil, un appui long sur un bloc permet aussi de les déplacer, retirer ou ajouter. Toute modification passe le profil en « Perso ».</p>
+      </div>
       <h3 class="settings-group">Navigation</h3>
       <div class="card glass setting">
         <span class="label">Écrans : ordre du balayage</span>
@@ -373,6 +402,12 @@
           <span class="box" aria-hidden="true"></span>
           <span class="check-text">Masquer les applis non installées</span>
         </label>
+        <label class="check">
+          <input id="opt-map-suggest" type="checkbox">
+          <span class="box" aria-hidden="true"></span>
+          <span class="check-text">Suggestions dans la recherche du Plan</span>
+        </label>
+        <p class="note">Adresses, lieux et magasins proposés pendant la frappe, d’après OpenStreetMap (service Photon, gratuit, sans compte) ; le texte tapé lui est envoyé. Le lieu choisi s’affiche sur la carte Google.</p>
       </div>
       <h3 class="settings-group">Apparence</h3>
       <div class="card glass setting">
@@ -442,6 +477,12 @@
           <span class="label">Changement automatique (aléatoire)</span>
           <div id="wp-interval" class="chips" role="radiogroup" aria-label="Délai de changement"></div>
         </div>
+      </div>
+      <h3 class="settings-group">Batterie</h3>
+      <div class="card glass setting">
+        <span class="label">Économie de batterie</span>
+        <div id="eco-mode" class="chips" role="radiogroup" aria-label="Économie de batterie"></div>
+        <p id="eco-note" class="note"></p>
       </div>
     </div>
   </section>
@@ -559,7 +600,7 @@
     </form>
   </dialog>
 
-  <div id="screen-dots" class="screen-dots" aria-hidden="true" hidden></div>
+  <nav id="screen-dots" class="screen-dots" aria-label="Écrans" hidden></nav>
 
   <div id="toast" class="toast" role="status" hidden>
     <span id="toast-msg"></span>

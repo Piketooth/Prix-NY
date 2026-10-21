@@ -25,7 +25,7 @@ const head = await p.evaluate(() => { const h = document.querySelector('header.m
 ok(`bandeau fixe au-dessus du titre de page: ${JSON.stringify(head)}`, head.pos === 'fixed' && head.tt >= head.hb);
 ok('menu disponible sur la page', await p.isVisible('#menu-open'));
 const groups = await p.$$eval('.settings-group', (l) => l.map((x) => x.textContent));
-ok(`rubriques: ${groups.join(', ')}`, groups.join() === 'Argent,Heure et météo,Saisie,Navigation,Apparence');
+ok(`rubriques: ${groups.join(', ')}`, groups.join() === 'Argent,Heure et météo,Saisie,Accueil,Navigation,Apparence,Batterie');
 ok(`givré en %: ${await p.textContent('#set-frost-v')}`, /^\d+ %$/.test(await p.textContent('#set-frost-v')));
 // Flou et opacité indépendants
 await p.fill('#set-opacity', '30'); await p.fill('#set-frost', '100'); await p.waitForTimeout(100);

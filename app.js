@@ -97,7 +97,10 @@ const state = {
     tint: null, // teinte du givré (#rrggbb) ; null = neutre
     tintMix: 60, // force de la teinte : part de la couleur dans le verre (100 % = couleur pure)
     glow: 100, // ombres et lueurs : 100 % = dosage automatique
-    wxModel: 'best_match' }, // source météo : modèle de prévision Open-Meteo
+    wxModel: 'best_match',
+    mapSuggest: true,
+    battery: 'auto',
+    home: { profile: 'shopping', perso: null } }, // accueil : profil et composition perso (blocs) // économie de batterie : 'off', 'auto' (sous 20 %, hors charge) ou 'on' // suggestions de lieux (Photon / OpenStreetMap) dans la recherche du Plan // source météo : modèle de prévision Open-Meteo
 };
 
 const store = {
@@ -353,8 +356,10 @@ const PAGE_INFO = {
     ['Argent', 'cours officiel de la BCE mis à jour automatiquement, ou votre propre taux ; frais bancaires de votre carte ; sales tax de New York et ses exonérations.'],
     ['Heure et météo', 'source des prévisions (NOAA, ECMWF, Météo-France…) ; ville dont l’heure s’affiche sous le titre, à côté de celle de New York. Le bouton position envoie votre position approximative au service BigDataCloud pour trouver le nom de la ville, et seulement à ce moment-là. Une ville absente de la liste intégrée est cherchée chez Open-Meteo.'],
     ['Saisie', 'langue de la dictée des prix et des villes, son au démarrage.'],
+    ['Accueil', 'profil (Shopping, Balade, Voyage ou Perso) et blocs de la page d’accueil : lesquels, dans quel ordre, en compact ou complet. Appui long sur un bloc de l’accueil pour le déplacer, le retirer ou en ajouter.'],
     ['Navigation', 'ordre des écrans quand on fait glisser le doigt ; applis affichées dans la page Applis utiles, leur ordre, vos propres applis, et masquer celles qui ne sont pas installées.'],
     ['Apparence', 'fond d’écran (photos de New York ou les vôtres), couleurs adaptées à la photo ; givré en trois réglages distincts : flou de la photo, opacité des cartes, teinte et sa force ; givré animé ; ombres et lueurs.'],
+    ['Batterie', 'économie de batterie : désactivée, automatique (sous 20 %, hors charge) ou toujours active ; sans flou, sans animations, météo moins souvent, position approximative.'],
   ]],
 };
 
@@ -559,6 +564,7 @@ async function loadWeather() {
     weather.ny = { temp: d.current.temperature_2m, code: d.current.weather_code, day: d.current.is_day === 1, min: d.daily.temperature_2m_min[0], max: d.daily.temperature_2m_max[0] };
   } catch { /* hors ligne */ }
   renderClocks();
+  fillBlock('weather');
 }
 
 // --- Page Météo (New York) : aujourd'hui en grand, matin / après-midi / soirée et soleil
@@ -739,7 +745,21 @@ function openWeather() {
 
 // --- Plan : carte Google intégrée (sans clé), votre position, recherche, itinéraire, partage -----
 
-const maps = { q: null, pos: null };
+const maps = { q: null, pos: null, picked: null };
+
+// Suggestions de lieux pendant la frappe : Photon (OpenStreetMap), centré sur New York ou votre position.
+async function placeSuggestions(text) {
+  const [lat, lon] = (maps.pos || '40.758,-73.9855').split(',');
+  const d = await fetchJson(`https://photon.komoot.io/api/?q=${encodeURIComponent(text)}&limit=6&lang=fr&lat=${lat}&lon=${lon}`);
+  return (d.features || []).map((f) => {
+    const p = f.properties || {};
+    const street = [p.housenumber, p.street].filter(Boolean).join(' ');
+    const name = p.name || street || p.city;
+    const place = [p.name && street, p.district || p.locality, p.city || p.county, p.state === 'New York' ? '' : p.state].filter(Boolean);
+    const [plon, plat] = f.geometry?.coordinates || [];
+    return { name, detail: [...new Set(place)].join(', '), q: [name, street && street !== name ? street : '', p.city || p.state].filter(Boolean).join(', '), lat: plat, lon: plon };
+  }).filter((x) => x.name);
+}
 function mapsUrl(q, zoom = 15) { return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=${zoom}&hl=fr&output=embed`; }
 function showMap(q, zoom) {
   maps.q = q;
@@ -750,18 +770,19 @@ const geo = (opts) => new Promise((resolve, reject) => {
   navigator.geolocation.getCurrentPosition(resolve, reject, opts);
 });
 // GPS précis d'abord, puis la position approximative (réseau) si le GPS ne répond pas.
-async function myPosition() {
+async function myPosition(precise = true) {
+  if (!precise) return geo({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 }); // réseau, sans GPS
   try { return await geo({ enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }); } catch (e) {
     if (e?.code === 1) throw e; // refusée : inutile d'insister
     return geo({ enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
   }
 }
-async function mapsHere() {
+async function mapsHere(precise = true) {
   const btn = $('maps-here');
   btn.classList.add('busy');
   $('maps-status').textContent = 'Recherche de votre position…';
   try {
-    const p = await myPosition();
+    const p = await myPosition(precise);
     maps.pos = `${p.coords.latitude.toFixed(5)},${p.coords.longitude.toFixed(5)}`;
     showMap(maps.pos, 17);
     $('maps-status').textContent = `📍 Vous êtes ici (précision ± ${Math.round(p.coords.accuracy)} m)`;
@@ -777,7 +798,7 @@ async function mapsHere() {
 function renderMaps() {
   if (maps.q) return;
   showMap('Times Square, New York');
-  mapsHere();
+  mapsHere(!eco.on); // économie de batterie : position approximative, le GPS seulement avec ◎
 }
 async function openExternal(url) {
   if (IS_NATIVE) {
@@ -798,7 +819,41 @@ function initMaps() {
     haptic();
   };
   $('maps-go').addEventListener('click', search);
-  input.addEventListener('change', search); // validé en fermant le clavier
+  input.addEventListener('change', () => { if (input.value !== maps.picked) search(); }); // validé en fermant le clavier
+  // Suggestions pendant la frappe (désactivables dans les Réglages)
+  const list = $('maps-suggest');
+  let seq = 0;
+  const hide = () => { list.hidden = true; list.replaceChildren(); };
+  input.addEventListener('input', async () => {
+    const n = ++seq;
+    const q = input.value.trim();
+    if (!state.settings.mapSuggest || q.length < 3) { hide(); return; }
+    await new Promise((r) => setTimeout(r, 300)); // fin de la frappe
+    if (n !== seq) return;
+    let found = [];
+    try { found = await placeSuggestions(q); } catch { /* hors ligne */ }
+    if (n !== seq) return;
+    list.replaceChildren(...found.map((f) => {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.innerHTML = '<b></b><span></span>';
+      li.querySelector('b').textContent = f.name;
+      li.querySelector('span').textContent = f.detail;
+      li.addEventListener('pointerdown', (e) => e.preventDefault()); // garde le champ actif jusqu'au choix
+      li.addEventListener('click', () => {
+        maps.picked = f.name;
+        input.value = f.name;
+        hide();
+        showMap(f.q || `${f.lat},${f.lon}`, 17);
+        $('maps-status').textContent = `📍 ${f.name}${f.detail ? ` · ${f.detail}` : ''}`;
+        if (openViews.at(-1)?.id === 'kbd') history.back(); // ferme le clavier
+        haptic();
+      });
+      return li;
+    }));
+    list.hidden = !found.length;
+  });
+  input.addEventListener('blur', () => setTimeout(hide, 200));
   $('maps-here').addEventListener('click', () => { input.value = ''; haptic(); mapsHere(); });
   $('maps-route').addEventListener('click', () => {
     haptic();
@@ -890,10 +945,13 @@ function openFirst(fail, ...actions) {
 function startClocks() {
   renderClocks();
   loadWeather();
-  setInterval(() => { if (document.visibilityState === 'visible') loadWeather(); }, 30 * 60 * 1000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - weather.at > 30 * 60 * 1000) loadWeather(); });
+  // Météo rafraîchie toutes les 30 min, toutes les 2 h en économie de batterie
+  const due = () => Date.now() - weather.at > (eco.on ? 2 * 60 : 30) * 60 * 1000 - 5000;
+  setInterval(() => { if (document.visibilityState === 'visible' && due()) loadWeather(); }, 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && due()) loadWeather(); });
   // Recalée sur le début de chaque minute.
-  setTimeout(() => { renderClocks(); setInterval(renderClocks, 60000); }, 60000 - (Date.now() % 60000) + 50);
+  const tick = () => { renderClocks(); fillBlock('clocks'); fillBlock('sun'); };
+  setTimeout(() => { tick(); setInterval(tick, 60000); }, 60000 - (Date.now() % 60000) + 50);
 }
 
 function setClockCity(c) {
@@ -1024,6 +1082,10 @@ function initClockSetting() {
 
 // Taux affiché dans la ligne d'édition du bandeau (court) ; le détail complet en infobulle.
 function renderRateInfo(offline) {
+  renderRateLine(offline);
+  fillBlock('rate');
+}
+function renderRateLine(offline) {
   const fx = state.fx;
   const el = $('rate-info');
   renderRateChecked();
@@ -1158,6 +1220,7 @@ function renderRateChecked() {
 // --- Retours haptiques et partage (natifs dans l'APK) ------------------------
 
 function haptic(kind = 'light') {
+  if (eco.on) return; // économie de batterie : pas de vibrations
   try {
     if (IS_NATIVE) {
       const cap = window.Capacitor;
@@ -1310,6 +1373,7 @@ function renderCart() {
 
   renderCartView('cart');
   if (editing) renderCartView('edit');
+  fillBlock('cart');
 }
 
 function renderCartView(kind) {
@@ -1972,6 +2036,9 @@ function initSettings() {
     }
     if (Array.isArray(s.customApps)) state.settings.customApps = s.customApps.filter((a) => a?.pkg && a?.name);
     if (s.hideMissing) state.settings.hideMissing = true;
+    if (s.mapSuggest === false) state.settings.mapSuggest = false;
+    if (['off', 'auto', 'on'].includes(s.battery)) state.settings.battery = s.battery;
+    if (s.home && HOME_PROFILES[s.home.profile]) state.settings.home = { profile: s.home.profile, perso: cleanBlocks(s.home.perso) };
     const custom = state.settings.customApps.map((c) => `c:${c.pkg}`);
     const apps = Array.isArray(s.apps) ? s.apps.filter((id) => APPS.some((a) => a.id === id) || custom.includes(id)) : state.settings.apps;
     if (!(s.v >= 2) && !apps.includes('mapmarker')) apps.splice(apps.includes('maps') ? apps.indexOf('maps') + 1 : 0, 0, 'mapmarker'); // v2 : Map Marker
@@ -2151,6 +2218,7 @@ function syncCovered() {
   const sheets = openViews.filter((v) => $(v.id)?.classList.contains('sheet'));
   document.querySelectorAll('.sheet.covered').forEach((el) => el.classList.remove('covered'));
   sheets.slice(0, -1).forEach((v) => $(v.id).classList.add('covered'));
+  renderPastilles();
 }
 
 window.addEventListener('popstate', () => {
@@ -2290,16 +2358,34 @@ function currentScreen() {
   return openViews.length ? screenOfView(openViews.at(-1).id) : 'main';
 }
 
-function showDots(screen) {
+// Pastilles façon lignes de métro de New York : une par écran, dans l'ordre du balayage ;
+// toucher une pastille mène à son écran. Cachées sous un pavé, un clavier ou une fenêtre.
+const METRO = { main: '#EE352E', apps: '#00933C', maps: '#0039A6', calc: '#FF6319', cart: '#FCCC0A', saved: '#B933AD', weather: '#6CBE45', settings: '#808183' };
+function renderPastilles() {
   const box = $('screen-dots');
-  box.replaceChildren(...state.settings.screens.map((id) => {
-    const i = document.createElement('i');
-    if (id === screen) i.className = 'on';
-    return i;
-  }));
-  box.hidden = false;
-  clearTimeout(showDots.t);
-  showDots.t = setTimeout(() => { box.hidden = true; }, 1200);
+  const cur = currentScreen();
+  box.hidden = !cur || document.body.classList.contains('home-edit');
+  if (box.hidden) return;
+  if (box.dataset.order !== state.settings.screens.join()) {
+    box.dataset.order = state.settings.screens.join();
+    box.replaceChildren(...state.settings.screens.map((id) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `metro${id === 'cart' ? ' dark' : ''}`;
+      b.dataset.screen = id;
+      b.style.setProperty('--line', METRO[id]);
+      b.innerHTML = SCREENS[id].icon;
+      b.setAttribute('aria-label', SCREENS[id].label);
+      b.title = SCREENS[id].label;
+      b.addEventListener('click', () => menuGo(id));
+      return b;
+    }));
+  }
+  for (const b of box.children) {
+    const on = b.dataset.screen === cur;
+    b.classList.toggle('on', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  }
 }
 
 function animateIn(els, dir) {
@@ -2342,7 +2428,7 @@ function goScreen(screen, dir) {
     if (screen === 'settings') checkApps([...APPS, ...state.settings.customApps.map(customApp)]).then(renderAppsChoice); // icônes du téléphone
   }
   syncCovered();
-  showDots(screen);
+  renderPastilles();
   haptic();
   return true;
 }
@@ -2358,7 +2444,7 @@ function swipe(delta) {
 function initSwipe() {
   let start = null;
   // Zones qui ont leur propre geste horizontal : articles (glisser pour supprimer), curseurs, recadrage…
-  const NO_SWIPE = '.item-wrap, input[type="range"], .crop-view, dialog, #keypad, #kbd, textarea, .wp-gallery';
+  const NO_SWIPE = '.item-wrap, input[type="range"], .crop-view, dialog, #keypad, #kbd, textarea, .wp-gallery, .home-edit, .hb-map, .hb-conv';
   document.addEventListener('touchstart', (e) => {
     const t = e.touches[0];
     start = e.touches.length === 1 && !e.target.closest(NO_SWIPE) ? { x: t.clientX, y: t.clientY, at: Date.now() } : null;
@@ -2477,8 +2563,12 @@ function calcPress(k) {
 
 function renderCalc(done = false) {
   const e = calc.expr;
-  $('calc-expr').textContent = done ? '' : e.replace(/([+−×÷])/g, ' $1 ');
-  $('calc-result').textContent = e ? fmtNum(calcEval(e)) : '0';
+  const expr = done ? '' : e.replace(/([+−×÷])/g, ' $1 ');
+  const result = e ? fmtNum(calcEval(e)) : '0';
+  $('calc-expr').textContent = expr;
+  $('calc-result').textContent = result;
+  // Calculatrice de l'accueil : même calcul
+  if ($('hcalc-result')) { $('hcalc-expr').textContent = expr; $('hcalc-result').textContent = result; }
 }
 
 function initCalc() {
@@ -3066,13 +3156,59 @@ function applyTheme() {
   document.documentElement.classList.toggle('theme-light', tone === 'light');
 }
 
+// --- Économie de batterie : moins de calculs graphiques, d'animations et de réseau ---------------
+
+const eco = { on: false, level: null, charging: null };
+const ECO_MODES = [['off', 'Désactivée'], ['auto', 'Automatique'], ['on', 'Toujours']];
+function updateEco() {
+  const m = state.settings.battery;
+  const low = eco.level != null && eco.level <= 0.2 && eco.charging === false;
+  const on = m === 'on' || (m === 'auto' && low);
+  const changed = on !== eco.on;
+  eco.on = on;
+  document.documentElement.classList.toggle('eco', on);
+  $('eco-badge').hidden = !on;
+  if (changed && eco.ready) { applyFrost(); applyWallpaper(); }
+  renderEcoSetting();
+}
+function renderEcoSetting() {
+  const box = $('eco-mode');
+  box.replaceChildren(...ECO_MODES.map(([v, label]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(state.settings.battery === v));
+    b.textContent = label;
+    b.addEventListener('click', () => { state.settings.battery = v; store.set('settings', state.settings); updateEco(); haptic(); });
+    return b;
+  }));
+  const level = eco.level != null ? ` Batterie : ${Math.round(eco.level * 100)} %${eco.charging ? ', en charge' : ''}.` : '';
+  $('eco-note').textContent = (eco.on ? 'Active 🔋 : ' : 'Quand elle est active : ')
+    + 'pas de flou (cartes plus opaques), pas d’animations ni de changement automatique de fond, météo toutes les 2 h, position approximative sur le Plan (le GPS seulement avec ◎), pas de vibrations. '
+    + (state.settings.battery === 'auto' ? `Automatique : sous 20 %, quand le téléphone ne charge pas.${level}${eco.level == null ? ' Niveau de batterie inconnu sur cet appareil : choisissez « Toujours » au besoin.' : ''} ` : level ? `${level} ` : '')
+    + 'Conseil : une photo de fond sombre consomme moins sur les écrans OLED.';
+}
+function initEco() {
+  updateEco();
+  eco.ready = true;
+  if (eco.on) applyFrost();
+  navigator.getBattery?.().then((b) => {
+    const read = () => { eco.level = b.level; eco.charging = b.charging; updateEco(); };
+    read();
+    b.addEventListener('levelchange', read);
+    b.addEventListener('chargingchange', read);
+  }).catch(() => {});
+}
+
 // Givré : flou (0 → 28 px) et opacité (0 → 100 %) réglés à part ; v = % de ces réglages, atteint en « dur » s.
 function setFrostLevel(v, dur = 0) {
   const root = document.documentElement.style;
-  const alpha = state.settings.opacity / 100 * v / 100;
+  // Économie de batterie : pas de flou (le plus coûteux), compensé par des cartes plus opaques.
+  const alpha = eco.on ? Math.max(0.8, state.settings.opacity / 100) : state.settings.opacity / 100 * v / 100;
   root.transition = dur ? `--glass-a ${dur}s ease-in-out, --blur ${dur}s ease-in-out` : 'none';
   root.setProperty('--glass-a', alpha.toFixed(3));
-  root.setProperty('--blur', `${(28 * state.settings.frost / 100 * v / 100).toFixed(1)}px`);
+  root.setProperty('--blur', eco.on ? '0px' : `${(28 * state.settings.frost / 100 * v / 100).toFixed(1)}px`);
   root.setProperty('--halo', (Math.max(0, 0.5 - alpha) / 0.5).toFixed(2)); // halo du texte sous 50 % d'opacité
 }
 
@@ -3083,7 +3219,7 @@ function applyFrost() {
   clearInterval(frostTimer);
   clearTimeout(frostBack);
   const a = state.settings.frostAnim;
-  if (!a.on) { setFrostLevel(100); return; }
+  if (!a.on || eco.on) { setFrostLevel(100); return; }
   setFrostLevel(a.from);
   const cycle = () => {
     setFrostLevel(a.to, a.dur);
@@ -3216,7 +3352,7 @@ function applyWallpaper() {
   if (wallpaper === 'none') showWallpaper(null);
   else if (wallpaper === 'random') {
     if (!wpCurrent || !allWallpapers().some((w) => w.id === wpCurrent)) showWallpaper(randomWallpaper());
-    if (wpInterval !== 'launch') wpTimer = setInterval(() => showWallpaper(randomWallpaper()), wpInterval * 1000);
+    if (wpInterval !== 'launch' && !eco.on) wpTimer = setInterval(() => showWallpaper(randomWallpaper()), wpInterval * 1000);
   } else if (allWallpapers().some((w) => w.id === wallpaper)) showWallpaper(wallpaper);
   else showWallpaper(randomWallpaper());
   renderWallpaperSettings();
@@ -3562,6 +3698,414 @@ async function startVoice() {
 
 // --- Démarrage ------------------------------------------------------------
 
+// --- Accueil modulable : blocs au choix, profils tout prêts, édition sur la page -------------
+
+const BLOCKS = {
+  price: { label: 'Saisie du prix', sizes: true },
+  cart: { label: 'Panier en cours', sizes: true, screen: 'cart' },
+  weather: { label: 'Météo du jour', sizes: true, screen: 'weather' },
+  sun: { label: 'Soleil', sizes: true, screen: 'weather' },
+  clocks: { label: 'Horloges' },
+  rate: { label: 'Cours du dollar', sizes: true },
+  map: { label: 'Mini-plan', sizes: true, screen: 'maps' },
+  apps: { label: 'Applis favorites', sizes: true, screen: 'apps' },
+  calc: { label: 'Calculatrice', screen: 'calc' },
+  tools: { label: 'Raccourcis' },
+};
+const BLOCK_IDS = Object.keys(BLOCKS);
+// Profil : blocs affichés dans l'ordre, les autres masqués à la suite.
+const preset = (on) => [...on.map(([id, size = 'full']) => ({ id, on: true, size })),
+  ...BLOCK_IDS.filter((id) => !on.some(([x]) => x === id)).map((id) => ({ id, on: false, size: 'compact' }))];
+const HOME_PROFILES = {
+  shopping: { label: 'Shopping', note: 'Saisie du prix, panier en cours et cours du dollar.', blocks: preset([['price'], ['cart', 'compact'], ['rate', 'compact']]) },
+  balade: { label: 'Balade', note: 'Météo, soleil, mini-plan, puis la saisie du prix en compact.', blocks: preset([['weather'], ['sun', 'compact'], ['map', 'compact'], ['price', 'compact']]) },
+  voyage: { label: 'Voyage', note: 'Horloges, convertisseur, météo, applis favorites et raccourcis.', blocks: preset([['clocks'], ['rate'], ['weather', 'compact'], ['apps', 'compact'], ['tools']]) },
+  perso: { label: 'Perso', note: 'Votre propre composition.' },
+};
+const home = { ready: false, els: {}, editing: false };
+const n2 = (v) => v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function homeBlocks() {
+  const h = state.settings.home;
+  return h.profile === 'perso' && h.perso ? h.perso : HOME_PROFILES[h.profile]?.blocks || HOME_PROFILES.shopping.blocks;
+}
+// Toute modification passe en profil « Perso », à partir de la composition affichée.
+function editHome(fn) {
+  const h = state.settings.home;
+  if (h.profile !== 'perso' || !h.perso) h.perso = clone(homeBlocks());
+  h.profile = 'perso';
+  fn(h.perso);
+  store.set('settings', state.settings);
+  renderHome();
+  renderHomeSetting();
+}
+// Composition enregistrée : blocs connus, chacun une seule fois, les nouveaux à la fin (masqués).
+function cleanBlocks(list) {
+  if (!Array.isArray(list)) return null;
+  const out = [];
+  for (const b of list) if (BLOCKS[b?.id] && !out.some((x) => x.id === b.id)) out.push({ id: b.id, on: !!b.on, size: b.size === 'compact' ? 'compact' : 'full' });
+  for (const id of BLOCK_IDS) if (!out.some((x) => x.id === id)) out.push({ id, on: false, size: 'compact' });
+  return out;
+}
+
+function blockShell(id, title) {
+  const el = document.createElement('section');
+  el.className = 'home-block card glass hb';
+  el.dataset.block = id;
+  el.innerHTML = '<div class="hb-head"><span class="label"></span></div><div class="hb-body"></div>';
+  el.querySelector('.label').textContent = title;
+  const scr = BLOCKS[id].screen;
+  if (scr) {
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'hb-more';
+    more.textContent = '›';
+    more.setAttribute('aria-label', `Ouvrir : ${SCREENS[scr].label}`);
+    more.addEventListener('click', () => menuGo(scr));
+    el.querySelector('.hb-head').append(more);
+  }
+  return el;
+}
+
+const HB_TITLES = { cart: 'Panier en cours', weather: 'Météo · New York', sun: 'Soleil · New York', clocks: 'Horloges', rate: 'Cours du dollar', map: 'Plan', apps: 'Applis favorites', calc: 'Calculatrice', tools: 'Raccourcis' };
+
+function initHome() {
+  home.els.price = document.querySelector('.home-block[data-block="price"]');
+  for (const id of BLOCK_IDS) if (!home.els[id]) home.els[id] = blockShell(id, HB_TITLES[id]);
+  // Appui long sur un bloc (hors boutons et champs) : mode édition
+  const box = $('home-blocks');
+  let timer = null;
+  let at = null;
+  const cancel = () => { clearTimeout(timer); timer = null; };
+  box.addEventListener('pointerdown', (e) => {
+    if (home.editing || e.target.closest('input, button, a, iframe, textarea, select, [role="button"], .cat, output')) return;
+    at = { x: e.clientX, y: e.clientY };
+    timer = setTimeout(() => { timer = null; haptic('medium'); enterHomeEdit(); }, 550);
+  });
+  box.addEventListener('pointermove', (e) => { if (timer && Math.hypot(e.clientX - at.x, e.clientY - at.y) > 10) cancel(); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => box.addEventListener(t, cancel));
+  box.addEventListener('contextmenu', (e) => { if (!e.target.closest('input, textarea')) e.preventDefault(); });
+  $('home-edit-btn').addEventListener('click', () => { haptic(); enterHomeEdit(); });
+  $('home-empty-add').addEventListener('click', () => { haptic(); enterHomeEdit(); });
+  $('home-done').addEventListener('click', () => history.back());
+  $('home-edit-open').addEventListener('click', () => {
+    haptic();
+    if (currentScreen() === 'main') { enterHomeEdit(); return; }
+    menuGo('main');
+    setTimeout(enterHomeEdit, 450); // après le retour à l'accueil
+  });
+  home.ready = true;
+  renderHome();
+  renderHomeSetting();
+}
+
+function enterHomeEdit() {
+  if (home.editing || currentScreen() !== 'main') return;
+  home.editing = true;
+  document.body.classList.add('home-edit');
+  openView('home-edit-bar', false);
+  renderHome();
+}
+OVERLAYS['home-edit-bar'] = () => {
+  home.editing = false;
+  document.body.classList.remove('home-edit');
+  renderHome();
+};
+
+function renderHome() {
+  if (!home.ready) return;
+  const box = $('home-blocks');
+  const list = homeBlocks();
+  for (const b of list) {
+    const el = home.els[b.id];
+    el.hidden = !b.on;
+    el.dataset.size = BLOCKS[b.id].sizes ? b.size : 'full';
+    box.append(el); // ordre
+    el.querySelector(':scope > .hb-tools')?.remove();
+    if (home.editing && b.on) el.prepend(blockTools(b));
+    if (b.on) fillBlock(b.id);
+  }
+  const shown = list.filter((b) => b.on);
+  $('home-empty').hidden = home.editing || shown.length > 0;
+  $('home-edit-btn').hidden = home.editing || !shown.length;
+  const add = $('home-add');
+  add.hidden = !home.editing;
+  if (home.editing) {
+    const off = list.filter((b) => !b.on);
+    $('home-add-list').replaceChildren(...off.map((b) => {
+      const c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'chip';
+      c.textContent = `＋ ${BLOCKS[b.id].label}`;
+      c.addEventListener('click', () => {
+        haptic();
+        editHome((l) => { const x = l.splice(l.findIndex((y) => y.id === b.id), 1)[0]; x.on = true; const last = l.map((y) => y.on).lastIndexOf(true); l.splice(last + 1, 0, x); });
+      });
+      return c;
+    }));
+    if (!off.length) $('home-add-list').replaceChildren(Object.assign(document.createElement('span'), { className: 'note', textContent: 'Tous les blocs sont affichés.' }));
+  }
+}
+
+// Outils d'un bloc en mode édition : poignée (glisser), taille, retirer
+function blockTools(b) {
+  const t = document.createElement('div');
+  t.className = 'hb-tools';
+  const grip = document.createElement('button');
+  grip.type = 'button';
+  grip.className = 'hb-grip';
+  grip.textContent = '≡';
+  grip.setAttribute('aria-label', `Déplacer : ${BLOCKS[b.id].label}`);
+  const name = Object.assign(document.createElement('span'), { className: 'hb-name', textContent: BLOCKS[b.id].label });
+  t.append(grip, name);
+  if (BLOCKS[b.id].sizes) {
+    const size = document.createElement('button');
+    size.type = 'button';
+    size.className = 'hb-size';
+    size.textContent = b.size === 'compact' ? 'Compact' : 'Complet';
+    size.addEventListener('click', () => { haptic(); editHome((l) => { const x = l.find((y) => y.id === b.id); x.size = x.size === 'compact' ? 'full' : 'compact'; }); });
+    t.append(size);
+  }
+  const x = document.createElement('button');
+  x.type = 'button';
+  x.className = 'hb-x';
+  x.textContent = '×';
+  x.setAttribute('aria-label', `Retirer : ${BLOCKS[b.id].label}`);
+  x.addEventListener('click', () => { haptic(); editHome((l) => { l.find((y) => y.id === b.id).on = false; }); });
+  t.append(x);
+  // Glisser la poignée : le bloc suit le doigt et prend sa place parmi les autres
+  grip.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const el = home.els[b.id];
+    const box = $('home-blocks');
+    el.classList.add('dragging');
+    const move = (ev) => {
+      const others = [...box.children].filter((c) => c !== el && !c.hidden);
+      const before = others.find((c) => { const r = c.getBoundingClientRect(); return ev.clientY < r.top + r.height / 2; });
+      if (before) { if (el.nextElementSibling !== before) box.insertBefore(el, before); } else if (box.lastElementChild !== el) box.append(el);
+    };
+    // Écoute sur la fenêtre : déplacer le bloc dans la page fait perdre la capture du doigt.
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      el.classList.remove('dragging');
+      const order = [...box.children].map((c) => c.dataset.block);
+      haptic();
+      editHome((l) => l.sort((p, q) => order.indexOf(p.id) - order.indexOf(q.id)));
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  });
+  return t;
+}
+
+// Contenu des blocs (mis à jour quand leurs données changent)
+function fillBlock(id) {
+  if (!home.ready || id === 'price') return;
+  const el = home.els[id];
+  if (!el || el.hidden) return;
+  const body = el.querySelector('.hb-body');
+  const full = el.dataset.size !== 'compact';
+  const row = (left, right, cls = '') => {
+    const r = document.createElement('div');
+    r.className = `hb-row ${cls}`;
+    const a = document.createElement('span');
+    const b = document.createElement('span');
+    a.append(...[].concat(left));
+    b.append(...[].concat(right));
+    r.append(a, b);
+    return r;
+  };
+  const big = (text) => Object.assign(document.createElement('b'), { className: 'hb-big', textContent: text });
+  if (id === 'cart') {
+    const n = cart.items.length;
+    body.replaceChildren(row([`${cart.name || 'Panier'}`, Object.assign(document.createElement('small'), { textContent: ` · ${n ? plural(n, 'article') : 'vide'}` })], big($('cart-eur').textContent)));
+    if (full && n) {
+      const ol = document.createElement('ol');
+      ol.className = 'hb-items';
+      ol.append(...cart.items.slice(-3).reverse().map((it) => {
+        const li = document.createElement('li');
+        li.append(row(`${catOf(it.category).emoji} ${it.name || 'Article'}`, usd.format(it.share)));
+        return li;
+      }));
+      body.append(ol);
+    }
+  } else if (id === 'weather') {
+    const w = weather.ny;
+    if (!w) { body.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Météo indisponible pour le moment.' })); return; }
+    body.replaceChildren(row([Object.assign(document.createElement('span'), { className: 'hb-icon', textContent: weatherIcon(w.code, w.day) }), big(`${Math.round(w.temp)}°`)],
+      [wxDesc(w.code), document.createElement('br'), `min ${Math.round(w.min)}° · max ${Math.round(w.max)}°`], 'hb-wx'));
+    if (full) {
+      fetchForecast().then((d) => {
+        if (el.dataset.size === 'compact' || el.querySelector('.wx-parts')) return;
+        const parts = document.createElement('div');
+        parts.className = 'wx-parts';
+        for (const p of dayParts(d, d.daily.time[0])) {
+          const e = document.createElement('div');
+          e.className = 'wx-part';
+          e.innerHTML = '<span class="n"></span><span class="i"></span><b></b>';
+          e.querySelector('.n').textContent = p.name;
+          e.querySelector('.i').textContent = p.code == null ? '—' : weatherIcon(p.code, !p.night || p.code > 3);
+          e.querySelector('b').textContent = p.code == null ? '' : `${Math.round(p.min)}–${Math.round(p.max)}°`;
+          parts.append(e);
+        }
+        body.append(parts);
+      }).catch(() => {});
+    }
+  } else if (id === 'sun') {
+    const s = sunDay(nyDate());
+    const range = ([a, b]) => `${nyTime(a)}–${nyTime(b)}`;
+    const rows = full
+      ? [['🌅 Lever', nyTime(s.rise)], ['🌇 Coucher', nyTime(s.set)], ['🔵 Heure bleue', `${range(s.blueAm)} · ${range(s.bluePm)}`], ['🟠 Heure dorée', `${range(s.goldAm)} · ${range(s.goldPm)}`]]
+      : [['🟠 Heure dorée', range(s.goldPm)], ['🌇 Coucher', nyTime(s.set)]];
+    const dl = document.createElement('dl');
+    dl.className = 'wx-sun';
+    for (const [k, v] of rows) dl.append(Object.assign(document.createElement('dt'), { textContent: k }), Object.assign(document.createElement('dd'), { textContent: v }));
+    body.replaceChildren(dl);
+  } else if (id === 'clocks') {
+    body.replaceChildren(row('New York', big($('mini-time').textContent.replace(/^NY /, ''))));
+    if ($('clock-home').textContent) body.append(row(state.settings.clock.label, $('clock-home').textContent.replace(state.settings.clock.label, '').trim()));
+  } else if (id === 'rate') {
+    const r = state.settings.rate || state.fx?.rate;
+    if (!r) { body.replaceChildren(Object.assign(document.createElement('p'), { className: 'note', textContent: 'Cours pas encore chargé.' })); return; }
+    const when = state.settings.rate ? 'taux perso' : `BCE ${new Date(`${state.fx.date}T12:00:00`).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}`;
+    body.replaceChildren(row(`1 $ = ${r.toLocaleString('fr-FR', { maximumFractionDigits: 4 })} €`, `100 € = ${n2(100 / r)} $`), row(Object.assign(document.createElement('small'), { textContent: when }), ''));
+    if (full) {
+      const conv = document.createElement('div');
+      conv.className = 'hb-conv';
+      conv.innerHTML = '<label><span>$</span><input class="field" inputmode="decimal" autocomplete="off" aria-label="Montant en dollars"></label><span>⇄</span><label><input class="field" inputmode="decimal" autocomplete="off" aria-label="Montant en euros"><span>€</span></label>';
+      const [usdIn, eurIn] = conv.querySelectorAll('input');
+      const num = (v) => parseFloat(v.replace(/\s/g, '').replace(',', '.'));
+      usdIn.addEventListener('input', () => { const v = num(usdIn.value); eurIn.value = Number.isFinite(v) ? n2(v * r) : ''; });
+      eurIn.addEventListener('input', () => { const v = num(eurIn.value); usdIn.value = Number.isFinite(v) ? n2(v / r) : ''; });
+      body.append(conv);
+    }
+  } else if (id === 'map') {
+    const q = maps.pos || 'Times Square, New York';
+    let f = body.querySelector('iframe');
+    if (!f) {
+      f = document.createElement('iframe');
+      f.className = 'hb-map';
+      f.title = 'Mini-plan';
+      f.loading = 'lazy';
+      const cover = document.createElement('button');
+      cover.type = 'button';
+      cover.className = 'hb-map-cover';
+      cover.setAttribute('aria-label', 'Ouvrir le Plan');
+      cover.addEventListener('click', () => menuGo('maps'));
+      body.replaceChildren(f, cover);
+    }
+    const src = mapsUrl(q, 14);
+    if (f.getAttribute('src') !== src) f.src = src;
+  } else if (id === 'apps') {
+    const list = shownApps().filter((a) => appInstalled.get(a.pkg) !== false).slice(0, full ? 8 : 4);
+    const g = document.createElement('div');
+    g.className = 'hb-apps';
+    g.append(...list.map((a) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hb-app';
+      b.append(appIconEl(a), Object.assign(document.createElement('span'), { textContent: a.name }));
+      b.addEventListener('click', () => launchApp(a));
+      return b;
+    }));
+    body.replaceChildren(list.length ? g : Object.assign(document.createElement('p'), { className: 'note', textContent: 'Aucune appli installée parmi celles choisies.' }));
+  } else if (id === 'calc') {
+    if (!body.querySelector('.hb-calc-keys')) {
+      const screen = document.createElement('div');
+      screen.className = 'hb-calc-screen';
+      screen.innerHTML = '<span id="hcalc-expr"></span><output id="hcalc-result">0</output>';
+      const keys = document.createElement('div');
+      keys.className = 'hb-calc-keys';
+      keys.append(...CALC_KEYS.map(([k, kind]) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = k;
+        if (kind) b.className = kind;
+        b.addEventListener('click', () => calcPress(k));
+        return b;
+      }));
+      body.replaceChildren(screen, keys);
+    }
+    renderCalc();
+  } else if (id === 'tools') {
+    const no = 'Réglage indisponible sur ce téléphone';
+    const tools = [['Wi-Fi', 'net-wifi', ['android.settings.panel.action.WIFI', 'android.settings.WIFI_SETTINGS']],
+      ['Données', 'net-data', ['android.settings.panel.action.INTERNET_CONNECTIVITY', 'android.settings.DATA_ROAMING_SETTINGS']],
+      ['Itinérance', 'net-roaming', ['android.settings.DATA_ROAMING_SETTINGS', 'android.settings.WIRELESS_SETTINGS']],
+      ['Shazam', 'shazam-now', ['com.shazam.android.intent.actions.START_TAGGING', 'com.shazam.android']]];
+    const g = document.createElement('div');
+    g.className = 'mast-tools hb-tools-row';
+    g.append(...tools.map(([label, src, actions]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mast-tool';
+      b.append($(src).querySelector('svg').cloneNode(true), Object.assign(document.createElement('span'), { textContent: label }));
+      b.addEventListener('click', IS_NATIVE ? openFirst(label === 'Shazam' ? 'Shazam n’est pas installé' : no, ...actions) : () => toast('Disponible dans l’appli Android'));
+      return b;
+    }));
+    body.replaceChildren(g);
+  }
+}
+
+// Réglages › Accueil : profil, blocs (case, taille, ordre)
+function renderHomeSetting() {
+  const h = state.settings.home;
+  $('home-profile').replaceChildren(...Object.entries(HOME_PROFILES).map(([id, p]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', String(h.profile === id));
+    b.textContent = p.label;
+    b.addEventListener('click', () => {
+      h.profile = id;
+      if (id === 'perso' && !h.perso) h.perso = clone(HOME_PROFILES.shopping.blocks);
+      store.set('settings', state.settings);
+      renderHome();
+      renderHomeSetting();
+      haptic();
+    });
+    return b;
+  }));
+  $('home-profile-note').textContent = HOME_PROFILES[h.profile].note;
+  const list = homeBlocks();
+  $('home-list').replaceChildren(...list.map((b, i) => {
+    const li = document.createElement('li');
+    li.className = b.on ? 'on' : '';
+    const check = document.createElement('label');
+    check.className = 'check home-check';
+    check.innerHTML = '<input type="checkbox"><span class="box" aria-hidden="true"></span><span class="name"></span>';
+    check.querySelector('.name').textContent = BLOCKS[b.id].label;
+    const input = check.querySelector('input');
+    input.checked = b.on;
+    input.addEventListener('change', () => { haptic(); editHome((l) => { l.find((y) => y.id === b.id).on = input.checked; }); });
+    li.append(check);
+    if (BLOCKS[b.id].sizes) {
+      const size = document.createElement('button');
+      size.type = 'button';
+      size.className = 'hb-size';
+      size.textContent = b.size === 'compact' ? 'Compact' : 'Complet';
+      size.setAttribute('aria-label', `Taille de ${BLOCKS[b.id].label} : ${size.textContent}`);
+      size.addEventListener('click', () => { haptic(); editHome((l) => { const x = l.find((y) => y.id === b.id); x.size = x.size === 'compact' ? 'full' : 'compact'; }); });
+      li.append(size);
+    }
+    for (const [d, text, label] of [[-1, '▲', 'Monter'], [1, '▼', 'Descendre']]) {
+      const m = document.createElement('button');
+      m.type = 'button';
+      m.className = 'mv';
+      m.textContent = text;
+      m.disabled = !list[i + d];
+      m.setAttribute('aria-label', `${label} : ${BLOCKS[b.id].label}`);
+      m.addEventListener('click', () => { haptic(); editHome((l) => { [l[i], l[i + d]] = [l[i + d], l[i]]; }); });
+      li.append(m);
+    }
+    return li;
+  }));
+}
+
 function init() {
   const firstLaunch = runSplash();
   renderEditionDate();
@@ -3644,12 +4188,19 @@ function init() {
   initBackButton();
   initInfoDialog();
   $('app-add').addEventListener('click', openAppPicker);
+  $('opt-map-suggest').checked = state.settings.mapSuggest;
+  $('opt-map-suggest').addEventListener('change', () => {
+    state.settings.mapSuggest = $('opt-map-suggest').checked;
+    store.set('settings', state.settings);
+    haptic();
+  });
   $('opt-hide-missing').addEventListener('change', () => {
     state.settings.hideMissing = $('opt-hide-missing').checked;
     store.set('settings', state.settings);
     haptic();
   });
   initFrostAnim();
+  initEco();
   initTintGlow();
   $('settings-info').addEventListener('click', () => showInfo(...PAGE_INFO.settings));
   // Retour dans l'appli : une appli a peut-être été installée entre-temps.
@@ -3672,7 +4223,9 @@ function init() {
   });
   document.querySelectorAll('[data-back]').forEach((b) => b.addEventListener('click', () => history.back()));
 
+  initHome();
   renderAll();
+  renderPastilles();
   loadTaxes();
   loadRate();
 
